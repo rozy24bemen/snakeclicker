@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Idle Snake - Optimización Espacial</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="game-container">
+        <header class="game-header">
+            <h1>🐍 Idle Snake</h1>
+            <div class="hud">
+                <div class="stat">
+                    <span class="label">Puntos de Crecimiento:</span>
+                    <span class="value" id="pc-counter">0</span>
+                </div>
+                <div class="stat">
+                    <span class="label">Longitud:</span>
+                    <span class="value" id="length-counter">3</span>
+                </div>
+                <div class="stat">
+                    <span class="label">Longitud Máxima:</span>
+                    <span class="value" id="max-length-counter">3</span>
+                </div>
+                <div class="stat">
+                    <span class="label">PC Tile Bonus:</span>
+                    <span class="value" id="pc-tile-bonus">+0</span>
+                </div>
+                <div class="stat">
+                    <span class="label">Velocidad:</span>
+                    <span class="value" id="speed-mult">x1.0</span>
+                </div>
+            </div>
+        </header>
+        
+        <div class="main-content">
+            <div class="game-area">
+                <canvas id="game-canvas" width="600" height="600"></canvas>
+                <div class="game-controls">
+                    <button id="edit-mode-btn" class="control-btn" disabled>Modo Edición</button>
+                    <button id="tile-place-btn" class="control-btn" disabled>Baldosas</button>
+                    <div class="tile-type-controls" id="tile-type-controls" style="display:none;">
+                        <label><input type="radio" name="tile-type" id="tile-type-pc" value="PC" checked> PC</label>
+                        <label><input type="radio" name="tile-type" id="tile-type-spd" value="SPD"> SPD</label>
+                        <span class="tile-inv" id="tile-inv-text">PC 0 | SPD 0</span>
+                    </div>
+                    <button id="pause-btn" class="control-btn">Pausar</button>
+                </div>
+            </div>
+            
+            <div class="upgrades-panel">
+                <h2>Mejoras</h2>
+                <div class="upgrades-container">
+                    <div class="upgrade-category">
+                        <h3>Mejoras Básicas</h3>
+                        <div id="basic-upgrades"></div>
+                    </div>
+                    
+                    <div class="upgrade-category">
+                        <h3>Expansión</h3>
+                        <div id="expansion-upgrades"></div>
+                    </div>
+                    
+                    <div class="upgrade-category">
+                        <h3>Muros Estratégicos</h3>
+                        <div id="wall-upgrades"></div>
+                    </div>
+                    
+                    <div class="upgrade-category prestige-section" style="display: none;">
+                        <h3>Células Mutantes</h3>
+                        <div class="stat">
+                            <span class="label">CM:</span>
+                            <span class="value" id="cm-counter">0</span>
+                        </div>
+                        <div id="prestige-upgrades"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal para colocación de muros -->
+    <div id="wall-placement-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3>Colocar Muro</h3>
+            <p id="wall-instruction">Haz clic en las casillas donde deseas colocar el muro.</p>
+            <div class="modal-actions">
+                <button id="cancel-wall-btn" class="btn-secondary">Cancelar</button>
+                <button id="confirm-wall-btn" class="btn-primary" disabled>Confirmar</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="js/utils.js"></script>
+    <script src="js/pathfinding.js"></script>
+    <script src="js/tile_effects.js"></script>
+    <script src="js/snake.js"></script>
+    <script src="js/walls.js"></script>
+    <script src="js/upgrades.js"></script>
+    <script src="js/game.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

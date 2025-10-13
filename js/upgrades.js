@@ -1,0 +1,527 @@
+// upgrades.js - Sistema de mejoras con PC y Células Mutantes
+
+class Upgrade {
+    constructor(id, name, description, baseCost, costType, maxLevel = Infinity) {
+        this.id = id;
+        this.name = name;
+        this.description = description;
+        this.baseCost = baseCost;
+        this.costType = costType; // 'pc' o 'cm'
+        this.maxLevel = maxLevel;
+        this.currentLevel = 0;
+        this.costMultiplier = 1.5;
+    }
+
+    // Calcular el costo actual
+    getCurrentCost() {
+        if (this.currentLevel >= this.maxLevel) {
+            return Infinity;
+        }
+        // Cálculo especial para expansión incremental de la cuadrícula
+        if (this.id === 'expansion') {
+            // Tamaño actual de la cuadrícula = base inicial + nivel actual
+            const projectedGridSize = GAME_CONFIG.INITIAL_GRID_SIZE + this.currentLevel; // tamaño antes de comprar siguiente nivel
+            // Fórmula: CostoBase * (GRID_SIZE / 5)
+            return Math.floor(this.baseCost * (projectedGridSize / 5));
+        }
+        return Math.floor(this.baseCost * Math.pow(this.costMultiplier, this.currentLevel));
+    }
+
+    // Verificar si se puede comprar
+    canPurchase(availableCurrency) {
+        return availableCurrency >= this.getCurrentCost() && 
+               this.currentLevel < this.maxLevel;
+    }
+
+    // Comprar mejora
+    purchase() {
+        if (this.currentLevel < this.maxLevel) {
+            this.currentLevel++;
+            return true;
+        }
+        return false;
+    }
+
+    // Obtener descripción con valores actuales
+    getDescription() {
+        return this.description.replace('{level}', this.currentLevel);
+    }
+
+    // Verificar si está al máximo nivel
+    isMaxLevel() {
+        return this.currentLevel >= this.maxLevel;
+    }
+
+    // Reset para nueva partida (mantener para PC upgrades)
+    resetForNewGame() {
+        // Las mejoras de PC se mantienen
+    }
+
+    // Reset para mutación
+    resetForMutation() {
+        if (this.costType === 'pc') {
+            this.currentLevel = 0;
+        }
+        // Las mejoras de CM se mantienen
+    }
+}
+
+class UpgradeManager {
+    constructor() {
+        this.upgrades = new Map();
+        this.initializeUpgrades();
+    }
+
+    // Inicializar todas las mejoras
+    initializeUpgrades() {
+        this.createBasicUpgrades();
+        this.createExpansionUpgrades();
+        this.createWallUpgrades();
+        this.createPrestigeUpgrades();
+    }
+
+    // Crear mejoras básicas (Fase 1)
+    createBasicUpgrades() {
+        const speedUpgrade = new Upgrade(
+            'speed',
+            'Velocidad de Movimiento',
+            'Aumenta la velocidad de la serpiente. Nivel {level}',
+            10,
+            'pc',
+            20
+        );
+
+        const multiplierUpgrade = new Upgrade(
+            'multiplier',
+            'Multiplicador de PC',
+            'Cada fruta otorga más PC. x{level}',
+            25,
+            'pc',
+            10
+        );
+
+        const cultivoUpgrade = new Upgrade(
+            'cultivo',
+            'Cultivo Expandido',
+            'Permite una fruta adicional simultánea (+1 por nivel).',
+            150,
+            'pc',
+            5
+        );
+
+        this.upgrades.set('speed', speedUpgrade);
+        this.upgrades.set('multiplier', multiplierUpgrade);
+        this.upgrades.set('cultivo', cultivoUpgrade);
+    }
+
+    // Crear mejoras de expansión (Fase 2)
+    createExpansionUpgrades() {
+        const expansionUpgrade = new Upgrade(
+            'expansion',
+            'Cápsula de Expansión',
+            'Aumenta el tamaño de la cuadrícula (+1 por nivel).',
+            100, // costo base (escala con tamaño actual)
+            'pc',
+            20 // desde 5 hasta 25 => +20 niveles posibles
+        );
+
+        const tilePcUpgrade = new Upgrade(
+            'tile_pc',
+            'Baldosas PC+',
+            'Añade 1 baldosa PC_MULT colocable por nivel (total {level}).',
+            250,
+            'pc',
+            15
+        );
+
+        const tileSpeedUpgrade = new Upgrade(
+            'tile_speed',
+            'Baldosas Velocidad',
+            'Añade 1 baldosa SPEED colocable por nivel (total {level}).',
+            300,
+            'pc',
+            15
+        );
+
+        this.upgrades.set('expansion', expansionUpgrade);
+        this.upgrades.set('tile_pc', tilePcUpgrade);
+        this.upgrades.set('tile_speed', tileSpeedUpgrade);
+    }
+
+    // Crear mejoras de muros (Fase 2)
+    createWallUpgrades() {
+        const portalWallUpgrade = new Upgrade(
+            'portal_wall',
+            'Portal Wall',
+            'Añade un par de portales al inventario. Cantidad: {level}',
+            200,
+            'pc',
+            10
+        );
+
+        const repulsionWallUpgrade = new Upgrade(
+            'repulsion_wall',
+            'Muro de Repulsión',
+            'Fuerza a la fruta a reaparecer lejos. Cantidad: {level}',
+            300,
+            'pc',
+            5
+        );
+
+        const boostWallUpgrade = new Upgrade(
+            'boost_wall',
+            'Muro de Impulso',
+            'Otorga supervelocidad temporal. Cantidad: {level}',
+            400,
+            'pc',
+            5
+        );
+
+        this.upgrades.set('portal_wall', portalWallUpgrade);
+        this.upgrades.set('repulsion_wall', repulsionWallUpgrade);
+        this.upgrades.set('boost_wall', boostWallUpgrade);
+    }
+
+    // Crear mejoras de prestigio (Fase 3)
+    createPrestigeUpgrades() {
+        const startSpeedUpgrade = new Upgrade(
+            'start_speed',
+            'Velocidad Inicial Permanente',
+            'Velocidad base permanente mejorada. Nivel {level}',
+            1,
+            'cm',
+            5
+        );
+
+        const startMultiplierUpgrade = new Upgrade(
+            'start_multiplier',
+            'Multiplicador Inicial Permanente',
+            'Multiplicador base permanente. x{level}',
+            2,
+            'cm',
+            5
+        );
+
+        const fusionWallUpgrade = new Upgrade(
+            'fusion_wall',
+            'Muro de Fusión',
+            'Muro especial que combina efectos. Cantidad: {level}',
+            3,
+            'cm',
+            3
+        );
+
+        this.upgrades.set('start_speed', startSpeedUpgrade);
+        this.upgrades.set('start_multiplier', startMultiplierUpgrade);
+        this.upgrades.set('fusion_wall', fusionWallUpgrade);
+    }
+
+    // Obtener mejora por ID
+    getUpgrade(upgradeId) {
+        return this.upgrades.get(upgradeId);
+    }
+
+    // Obtener todas las mejoras de un tipo
+    getUpgradesByType(costType) {
+        return Array.from(this.upgrades.values()).filter(upgrade => 
+            upgrade.costType === costType
+        );
+    }
+
+    // Comprar mejora
+    purchaseUpgrade(upgradeId, stats, wallManager = null) {
+        const upgrade = this.getUpgrade(upgradeId);
+        if (!upgrade) {
+            Logger.warn(`Mejora ${upgradeId} no encontrada`);
+            return false;
+        }
+
+        const cost = upgrade.getCurrentCost();
+        let hasEnoughCurrency = false;
+
+        // Verificar moneda disponible
+        if (upgrade.costType === 'pc') {
+            hasEnoughCurrency = stats.growthPoints >= cost;
+        } else if (upgrade.costType === 'cm') {
+            hasEnoughCurrency = stats.mutantCells >= cost;
+        }
+
+        if (!hasEnoughCurrency) {
+            Logger.warn(`No hay suficiente ${upgrade.costType} para comprar ${upgradeId}`);
+            return false;
+        }
+
+        // Comprar mejora
+        if (!upgrade.purchase()) {
+            Logger.warn(`No se pudo comprar ${upgradeId} (posiblemente al máximo nivel)`);
+            return false;
+        }
+
+        // Deducir costo
+        if (upgrade.costType === 'pc') {
+            stats.spendGrowthPoints(cost);
+        } else if (upgrade.costType === 'cm') {
+            stats.spendMutantCells(cost);
+        }
+
+        // Aplicar efectos de la mejora
+        this.applyUpgradeEffects(upgradeId, upgrade.currentLevel, wallManager);
+
+        Logger.log(`Mejora ${upgradeId} comprada. Nivel actual: ${upgrade.currentLevel}`);
+        return true;
+    }
+
+    // Aplicar efectos de mejora
+    applyUpgradeEffects(upgradeId, level, wallManager = null) {
+        switch (upgradeId) {
+            case 'portal_wall':
+                if (wallManager) {
+                    wallManager.addToInventory(WALL_TYPES.PORTAL, 1);
+                }
+                break;
+            case 'repulsion_wall':
+                if (wallManager) {
+                    wallManager.addToInventory(WALL_TYPES.REPULSION, 1);
+                }
+                break;
+            case 'boost_wall':
+                if (wallManager) {
+                    wallManager.addToInventory(WALL_TYPES.BOOST, 1);
+                }
+                break;
+            case 'tile_pc':
+                // efecto manejado en game para incrementar inventario de baldosas
+                break;
+            case 'fusion_wall':
+                // Implementar muro de fusión en el futuro
+                break;
+        }
+    }
+
+    // Obtener velocidad actual de la serpiente
+    getCurrentSpeed() {
+        const speedUpgrade = this.getUpgrade('speed');
+        const startSpeedUpgrade = this.getUpgrade('start_speed');
+        
+        const speedBonus = speedUpgrade ? speedUpgrade.currentLevel : 0;
+        const startSpeedBonus = startSpeedUpgrade ? startSpeedUpgrade.currentLevel : 0;
+        
+        const totalSpeedMultiplier = 1 + (speedBonus * 0.2) + (startSpeedBonus * 0.1);
+        return Math.max(GAME_CONFIG.MIN_SPEED, 
+                       GAME_CONFIG.INITIAL_SPEED / totalSpeedMultiplier);
+    }
+
+    // Obtener multiplicador actual de PC
+    getCurrentPCMultiplier() {
+        const multiplierUpgrade = this.getUpgrade('multiplier');
+        const startMultiplierUpgrade = this.getUpgrade('start_multiplier');
+        
+        const multiplierLevel = multiplierUpgrade ? multiplierUpgrade.currentLevel : 0;
+        const startMultiplierLevel = startMultiplierUpgrade ? startMultiplierUpgrade.currentLevel : 0;
+        
+        return Math.max(1, multiplierLevel + startMultiplierLevel);
+    }
+
+    // Obtener tamaño actual de la cuadrícula
+    getCurrentGridSize() {
+        const expansionUpgrade = this.getUpgrade('expansion');
+        const level = expansionUpgrade ? expansionUpgrade.currentLevel : 0;
+        // Ahora cada nivel suma +1 celda al lado
+        return GAME_CONFIG.INITIAL_GRID_SIZE + level;
+    }
+
+    // Verificar si una mejora está disponible para comprar
+    isUpgradeAvailable(upgradeId, stats) {
+        const upgrade = this.getUpgrade(upgradeId);
+        if (!upgrade) return false;
+
+        // Verificar requisitos especiales
+        switch (upgradeId) {
+            case 'repulsion_wall':
+                return this.getUpgrade('portal_wall').currentLevel >= 1;
+            case 'boost_wall':
+                return this.getUpgrade('portal_wall').currentLevel >= 1;
+            case 'fusion_wall':
+                return stats.mutantCells >= 1; // Disponible solo después de la primera mutación
+        }
+
+        return true;
+    }
+
+    // Obtener lista de mejoras disponibles para mostrar
+    getAvailableUpgrades(costType, stats) {
+        return this.getUpgradesByType(costType).filter(upgrade => 
+            this.isUpgradeAvailable(upgrade.id, stats)
+        );
+    }
+
+    // Reset para nueva partida
+    resetForNewGame() {
+        // Las mejoras de PC se mantienen
+        this.upgrades.forEach(upgrade => upgrade.resetForNewGame());
+    }
+
+    // Reset para mutación
+    resetForMutation() {
+        this.upgrades.forEach(upgrade => upgrade.resetForMutation());
+    }
+
+    // Guardar mejoras
+    save() {
+        const upgradesData = {};
+        this.upgrades.forEach((upgrade, id) => {
+            upgradesData[id] = {
+                currentLevel: upgrade.currentLevel
+            };
+        });
+        StorageUtils.save('upgrades', upgradesData);
+    }
+
+    // Cargar mejoras
+    load() {
+        const upgradesData = StorageUtils.load('upgrades', {});
+        Object.keys(upgradesData).forEach(id => {
+            const upgrade = this.getUpgrade(id);
+            if (upgrade) {
+                upgrade.currentLevel = upgradesData[id].currentLevel || 0;
+            }
+        });
+    }
+
+    // Obtener información de debug
+    getDebugInfo() {
+        const info = {};
+        this.upgrades.forEach((upgrade, id) => {
+            info[id] = {
+                level: upgrade.currentLevel,
+                cost: upgrade.getCurrentCost(),
+                maxLevel: upgrade.maxLevel,
+                isMaxLevel: upgrade.isMaxLevel()
+            };
+        });
+        return info;
+    }
+}
+
+// Clase para manejar la UI de mejoras
+class UpgradeUI {
+    constructor(upgradeManager) {
+        this.upgradeManager = upgradeManager;
+        this.containers = {
+            basic: document.getElementById('basic-upgrades'),
+            expansion: document.getElementById('expansion-upgrades'),
+            walls: document.getElementById('wall-upgrades'),
+            prestige: document.getElementById('prestige-upgrades')
+        };
+    }
+
+    // Actualizar toda la UI de mejoras
+    updateUI(stats) {
+        this.updateBasicUpgrades(stats);
+        this.updateExpansionUpgrades(stats);
+        this.updateWallUpgrades(stats);
+        this.updatePrestigeUpgrades(stats);
+        this.updatePrestigeVisibility(stats);
+    }
+
+    // Actualizar mejoras básicas
+    updateBasicUpgrades(stats) {
+        const upgrades = ['speed', 'multiplier'];
+        this.updateUpgradeContainer(this.containers.basic, upgrades, stats);
+    }
+
+    // Actualizar mejoras de expansión
+    updateExpansionUpgrades(stats) {
+        const upgrades = ['expansion', 'cultivo', 'tile_pc', 'tile_speed'];
+        this.updateUpgradeContainer(this.containers.expansion, upgrades, stats);
+    }
+
+    // Actualizar mejoras de muros
+    updateWallUpgrades(stats) {
+        const upgrades = ['portal_wall', 'repulsion_wall', 'boost_wall'];
+        this.updateUpgradeContainer(this.containers.walls, upgrades, stats);
+    }
+
+    // Actualizar mejoras de prestigio
+    updatePrestigeUpgrades(stats) {
+        const upgrades = ['start_speed', 'start_multiplier', 'fusion_wall'];
+        this.updateUpgradeContainer(this.containers.prestige, upgrades, stats);
+    }
+
+    // Actualizar visibilidad de la sección de prestigio
+    updatePrestigeVisibility(stats) {
+        const prestigeSection = document.querySelector('.prestige-section');
+        if (prestigeSection) {
+            prestigeSection.style.display = stats.canMutate() || stats.mutantCells > 0 ? 'block' : 'none';
+        }
+    }
+
+    // Actualizar un contenedor específico de mejoras
+    updateUpgradeContainer(container, upgradeIds, stats) {
+        if (!container) return;
+
+        container.innerHTML = '';
+        
+        upgradeIds.forEach(upgradeId => {
+            const upgrade = this.upgradeManager.getUpgrade(upgradeId);
+            if (!upgrade || !this.upgradeManager.isUpgradeAvailable(upgradeId, stats)) {
+                return;
+            }
+
+            const upgradeElement = this.createUpgradeElement(upgrade, stats);
+            container.appendChild(upgradeElement);
+        });
+    }
+
+    // Crear elemento HTML para una mejora
+    createUpgradeElement(upgrade, stats) {
+        const upgradeDiv = document.createElement('div');
+        upgradeDiv.className = 'upgrade-item';
+        
+        const cost = upgrade.getCurrentCost();
+        const canAfford = upgrade.canPurchase(
+            upgrade.costType === 'pc' ? stats.growthPoints : stats.mutantCells
+        );
+        
+        upgradeDiv.innerHTML = `
+            <div class="upgrade-header">
+                <span class="upgrade-name">${upgrade.name}</span>
+                <span class="upgrade-level">Nv. ${upgrade.currentLevel}</span>
+            </div>
+            <div class="upgrade-description">${upgrade.getDescription()}</div>
+            <div class="upgrade-cost">
+                <span class="cost-display">
+                    ${upgrade.isMaxLevel() ? 'MAX' : `${FormatUtils.formatNumber(cost)} ${upgrade.costType.toUpperCase()}`}
+                </span>
+                <button class="upgrade-btn ${canAfford ? 'affordable' : ''}" 
+                        ${canAfford && !upgrade.isMaxLevel() ? '' : 'disabled'}>
+                    ${upgrade.isMaxLevel() ? 'MAX' : 'Comprar'}
+                </button>
+            </div>
+        `;
+
+        // Agregar event listener para compra
+        const button = upgradeDiv.querySelector('.upgrade-btn');
+        button.addEventListener('click', () => {
+            this.onUpgradePurchase(upgrade.id);
+        });
+
+        return upgradeDiv;
+    }
+
+    // Manejar compra de mejora
+    onUpgradePurchase(upgradeId) {
+        // Esta función será sobrescrita por el juego principal
+        Logger.log(`Intento de compra: ${upgradeId}`);
+    }
+
+    // Establecer callback para compra de mejoras
+    setUpgradePurchaseCallback(callback) {
+        this.onUpgradePurchase = callback;
+    }
+}
+
+// Exportar si se usa en módulos
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { Upgrade, UpgradeManager, UpgradeUI };
+}

@@ -1,0 +1,922 @@
+// game.js - Clase principal del juego que maneja toda la lógica
+
+class IdleSnakeGame {
+    constructor() {
+        // Elementos del DOM
+        this.canvas = document.getElementById('game-canvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.pauseBtn = document.getElementById('pause-btn');
+    this.editModeBtn = document.getElementById('edit-mode-btn');
+    this.tilePlaceBtn = document.getElementById('tile-place-btn');
+    this.tileTypeControls = document.getElementById('tile-type-controls');
+    this.tileTypePcRadio = document.getElementById('tile-type-pc');
+    this.tileTypeSpdRadio = document.getElementById('tile-type-spd');
+    this.tileInvText = document.getElementById('tile-inv-text');
+        
+        // Elementos de estadísticas
+        this.pcCounter = document.getElementById('pc-counter');
+        this.lengthCounter = document.getElementById('length-counter');
+        this.maxLengthCounter = document.getElementById('max-length-counter');
+        this.cmCounter = document.getElementById('cm-counter');
+    this.pcTileBonusEl = document.getElementById('pc-tile-bonus');
+    this.speedMultEl = document.getElementById('speed-mult');
+
+        // Estado del juego
+        this.isPaused = false;
+    this.isEditMode = false;
+    this.tilePlacementMode = false;
+    this.tilePlacementType = (typeof TILE_EFFECTS !== 'undefined' && TILE_EFFECTS.PC_MULT) ? TILE_EFFECTS.PC_MULT : 'PC_MULT';
+    this.tileInventory = { PC_MULT: 0, SPEED: 0 };
+        this.gameLoopId = null;
+        this.lastUpdateTime = 0;
+
+        // Inicializar sistemas del juego
+        this.initializeGame();
+        this.setupEventListeners();
+        this.loadGameState();
+        
+        // Iniciar el bucle del juego
+        this.startGameLoop();
+    }
+
+    // Inicializar todos los sistemas del juego
+    initializeGame() {
+        this.stats = new GameStats();
+        this.upgradeManager = new UpgradeManager();
+        this.wallManager = new WallManager();
+    this.pathfindingAI = new PathfindingAI();
+    this.tileEffects = new TileEffectMap(this.gridSize);
+        
+        // Inicializar tamaño de cuadrícula (arranca siempre en base y expansión futura ajustará)
+        this.gridSize = GAME_CONFIG.INITIAL_GRID_SIZE; // expansión futura modificará via resetGame()
+        this.updateCanvasSize();
+        
+        // Inicializar entidades principales
+        this.snake = new Snake(this.gridSize);
+        // Recolocar cuerpo centrado explícitamente para robustez
+        const center = Math.floor(this.gridSize / 2);
+        this.snake.body[0] = { x: center, y: center };
+        this.snake.body[1] = { x: center - 1, y: center };
+        this.snake.body[2] = { x: center - 2, y: center };
+    // Multi-frutas (Fase 2): iniciar arreglo
+    this.fruits = [];
+    this.ensureFruitPopulation();
+        
+        // Inicializar UI
+        this.upgradeUI = new UpgradeUI(this.upgradeManager);
+        this.upgradeUI.setUpgradePurchaseCallback((upgradeId) => {
+            this.purchaseUpgrade(upgradeId);
+        });
+
+        Logger.log('Juego inicializado correctamente');
+    }
+
+    // Configurar event listeners
+    setupEventListeners() {
+        // Botón de pausa
+        this.pauseBtn.addEventListener('click', () => {
+            this.togglePause();
+        });
+
+        // Botón de modo edición
+        this.editModeBtn.addEventListener('click', () => {
+            this.toggleEditMode();
+        });
+        if (this.tilePlaceBtn) {
+            this.tilePlaceBtn.addEventListener('click', () => {
+                if (!this.isEditMode) this.toggleEditMode();
+                const totalInv = (this.tileInventory.PC_MULT + this.tileInventory.SPEED);
+                if (totalInv <= 0) return;
+                this.tilePlacementMode = !this.tilePlacementMode;
+                // Al activar, seleccionar el tipo según disponibilidad si el actual no tiene stock
+                if (this.tilePlacementMode) {
+                    if (this.tilePlacementType === TILE_EFFECTS.PC_MULT && this.tileInventory.PC_MULT <= 0 && this.tileInventory.SPEED > 0) {
+                        this.tilePlacementType = TILE_EFFECTS.SPEED;
+                    } else if (this.tilePlacementType === TILE_EFFECTS.SPEED && this.tileInventory.SPEED <= 0 && this.tileInventory.PC_MULT > 0) {
+                        this.tilePlacementType = TILE_EFFECTS.PC_MULT;
+                    }
+                }
+                this.syncTileTypeRadios();
+                this.updateUI();
+            });
+        }
+
+        // Radio change handlers
+        if (this.tileTypePcRadio) {
+            this.tileTypePcRadio.addEventListener('change', () => {
+                if (this.tileTypePcRadio.checked) this.tilePlacementType = TILE_EFFECTS.PC_MULT;
+                this.updateUI();
+            });
+        }
+        if (this.tileTypeSpdRadio) {
+            this.tileTypeSpdRadio.addEventListener('change', () => {
+                if (this.tileTypeSpdRadio.checked) this.tilePlacementType = TILE_EFFECTS.SPEED;
+                this.updateUI();
+            });
+        }
+
+        // Clicks en el canvas
+        this.canvas.addEventListener('click', (e) => {
+            if (this.isEditMode) {
+                this.handleCanvasClick(e);
+            }
+        });
+
+        // Guardar automáticamente cada 30 segundos
+        setInterval(() => {
+            this.saveGameState();
+        }, 30000);
+
+        // Guardar antes de cerrar la página
+        window.addEventListener('beforeunload', () => {
+            this.saveGameState();
+        });
+
+        Logger.log('Event listeners configurados');
+    }
+
+    // Manejar clicks en el canvas durante modo edición
+    handleCanvasClick(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
+        
+        const cellPosition = CanvasUtils.getCellFromCanvas(
+            canvasX, 
+            canvasY, 
+            GAME_CONFIG.CELL_SIZE
+        );
+
+        if (!MathUtils.isValidPosition(cellPosition, this.gridSize)) return;
+        if (this.tilePlacementMode) {
+            const remove = e.shiftKey === true;
+            this.placeOrRemoveTileEffect(cellPosition.x, cellPosition.y, remove);
+            return;
+        }
+        if (this.wallManager.placementMode) {
+            this.placeWallPart(cellPosition);
+        } else {
+            this.selectWallForRemoval(cellPosition);
+        }
+    }
+
+    // Colocar parte de muro
+    placeWallPart(position) {
+        const success = this.wallManager.placePart(position, this.snake, this.fruit);
+        
+        if (success) {
+            // Si el muro se completó, salir del modo de colocación
+            if (!this.wallManager.currentWallBeingPlaced) {
+                this.showWallPlacementComplete();
+            }
+        } else {
+            this.showWallPlacementError();
+        }
+    }
+
+    // Seleccionar muro para remover
+    selectWallForRemoval(position) {
+        const wall = this.wallManager.getWallAt(position);
+        if (wall) {
+            if (confirm(`¿Remover ${wall.type}? Se devolverá al inventario.`)) {
+                this.wallManager.removeWall(wall.id);
+                this.updateUI();
+            }
+        }
+    }
+
+    // Bucle principal del juego
+    gameLoop(currentTime) {
+        if (this.isPaused) {
+            this.gameLoopId = requestAnimationFrame((time) => this.gameLoop(time));
+            return;
+        }
+
+        // Calcular delta time para movimiento basado en tiempo
+        const deltaTime = currentTime - this.lastUpdateTime;
+        let moveSpeed = this.snake.isBoostActive() ? 
+                         this.upgradeManager.getCurrentSpeed() / 3 : 
+                         this.upgradeManager.getCurrentSpeed();
+        // Aplicar baldosa de velocidad (SPEED) en la celda de la cabeza
+        const headForSpeed = this.snake.getHead();
+        if (this.tileEffects && headForSpeed && typeof getSpeedMultiplierForCell === 'function') {
+            const mult = getSpeedMultiplierForCell(this.tileEffects, headForSpeed.x, headForSpeed.y);
+            if (mult && mult > 0) moveSpeed = moveSpeed / mult;
+        }
+
+        if (deltaTime >= moveSpeed) {
+            this.update();
+            this.lastUpdateTime = currentTime;
+        }
+
+        this.render();
+        this.gameLoopId = requestAnimationFrame((time) => this.gameLoop(time));
+    }
+
+    // Actualizar lógica del juego
+    update() {
+        if (!this.snake.isSnakeAlive()) return;
+
+        // Obtener dirección de la IA
+        const targetFruit = this.chooseTargetFruit();
+        const aiDirection = this.pathfindingAI.getNextDirection(
+            this.snake,
+            targetFruit,
+            this.wallManager.walls,
+            this.gridSize
+        );
+
+        if (aiDirection) {
+            this.snake.setDirection(aiDirection);
+        }
+
+        // Mover serpiente
+        if (!this.snake.move()) return;
+
+        // Verificar colisiones fatales
+        const hitWall = this.snake.checkWallCollision();
+        const hitSelf = !hitWall && this.snake.checkSelfCollision();
+        if (hitWall || hitSelf) {
+            // Snapshot debug antes de muerte
+            if (typeof window !== 'undefined') {
+                window.LAST_DEATH_SNAPSHOT = {
+                    reason: hitWall ? 'wall' : 'self',
+                    snakeHead: { ...this.snake.getHead() },
+                    length: this.snake.body.length,
+                    ai: window.DEBUG_AI || null,
+                    pathCache: this.pathfindingAI.currentPath ? [...this.pathfindingAI.currentPath] : null
+                };
+                console.log('[IdleSnake][DeathSnapshot]', window.LAST_DEATH_SNAPSHOT);
+            }
+            this.handleSnakeDeath();
+            return;
+        }
+
+        // Procesar interacciones con muros
+        const wallInteraction = this.wallManager.processSnakeWallInteraction(this.snake);
+        if (wallInteraction) {
+            this.handleWallInteraction(wallInteraction);
+        }
+
+        // Verificar si comió fruta
+        // Verificar frutas comidas
+        for (let i = this.fruits.length - 1; i >= 0; i--) {
+            if (this.snake.isHeadAt(this.fruits[i].position)) {
+                this.handleFruitEaten(this.fruits[i]);
+                this.fruits.splice(i, 1);
+            }
+        }
+        // Reponer población de frutas si falta
+        this.ensureFruitPopulation();
+
+        // Actualizar estadísticas
+        this.stats.updateCurrentLength(this.snake.length);
+        this.updateUI();
+    }
+
+    // Manejar muerte de la serpiente
+    handleSnakeDeath() {
+        Logger.log('Serpiente murió');
+        
+        this.snake.kill();
+        this.stats.snakeDeath();
+        this.pathfindingAI.reset();
+        
+        // Reiniciar después de un breve delay
+        setTimeout(() => {
+            this.restartRun();
+        }, 1000);
+    }
+
+    // Reiniciar partida (mantener mejoras y PC)
+    restartRun() {
+        // Mantener mejoras pero reiniciar entidades sobre el tamaño actual
+        this.resetGame(this.gridSize, { preserveStats: true });
+        Logger.log('Partida reiniciada (resetGame)');
+    }
+
+    // Manejar interacción con muro
+    handleWallInteraction(interaction) {
+        switch (interaction.type) {
+            case 'teleport':
+                Logger.log(`Teletransporte a (${interaction.position.x}, ${interaction.position.y})`);
+                break;
+            case 'boost':
+                Logger.log(`Boost activado por ${interaction.duration}ms`);
+                break;
+        }
+    }
+
+    // Manejar cuando se come una fruta
+    handleFruitEaten(fruit) {
+        this.snake.grow();
+        const multiplier = this.upgradeManager.getCurrentPCMultiplier();
+        let tileBonus = 0;
+        const head = this.snake.getHead();
+        const effect = this.tileEffects ? this.tileEffects.getEffect(head.x, head.y) : null;
+        if (effect === TILE_EFFECTS.PC_MULT) tileBonus += 1;
+        const reward = fruit.getRewardBase(multiplier) + tileBonus;
+        this.stats.eatFruit(reward);
+        if (fruit.type === 'golden') Logger.log('Golden Apple consumida');
+        if (this.stats.canMutate() && !document.querySelector('.prestige-section').style.display !== 'none') {
+            this.showMutationAvailable();
+        }
+        Logger.log(`Fruta comida (${fruit.type}). PC ganados: ${reward}`);
+    }
+
+    // Generar nueva fruta
+    // Multi-frutas: asegurar población acorde a cultivo
+    ensureFruitPopulation() {
+        const cultivo = this.upgradeManager.getUpgrade('cultivo');
+        const extra = cultivo ? cultivo.currentLevel : 0;
+        const desired = 1 + extra; // base 1
+        while (this.fruits.length < desired) {
+            const fruit = this.createFruit();
+            if (fruit) this.fruits.push(fruit); else break;
+        }
+    }
+
+    createFruit() {
+        let attempts = 0; const maxAttempts = 100;
+        while (attempts < maxAttempts) {
+            const f = new Fruit(this.gridSize);
+            // Golden 2%
+            if (Math.random() < 0.02) f.setType('golden');
+            f.generateNewPosition([
+                ...this.snake.getOccupiedPositions(),
+                ...this.wallManager.getAllWallPositions(),
+                ...this.fruits?.map(fr => fr.position) || []
+            ]);
+            // Validar repulsión
+            if (!this.wallManager.checkFruitRepulsion || !this.wallManager.checkFruitRepulsion(f)) {
+                return f;
+            }
+            attempts++;
+        }
+        Logger.warn('No se pudo generar nueva fruta multi-intento');
+        return null;
+    }
+
+    // Renderizar el juego
+    render() {
+        // Limpiar canvas
+        CanvasUtils.clear(this.ctx, this.canvas.width, this.canvas.height);
+        
+        // Dibujar fondo
+        this.ctx.fillStyle = GAME_CONFIG.COLORS.BACKGROUND;
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Dibujar cuadrícula
+        CanvasUtils.drawGrid(this.ctx, this.gridSize, GAME_CONFIG.CELL_SIZE);
+        
+    // Dibujar muros
+    this.renderWalls();
+    // Dibujar efectos de baldosas (debajo de frutas y serpiente)
+    this.renderTileEffects();
+        
+        // Dibujar fruta
+    if (this.fruits) this.renderFruits();
+        
+        // Dibujar serpiente
+        this.renderSnake();
+        
+        // Dibujar overlay para modo edición
+        if (this.isEditMode) {
+            this.renderEditModeOverlay();
+        }
+    }
+
+    // Renderizar muros
+    renderWalls() {
+        this.wallManager.walls.forEach(wall => {
+            wall.positions.forEach(pos => {
+                const canvasPos = CanvasUtils.getCanvasFromCell(
+                    pos.x, 
+                    pos.y, 
+                    GAME_CONFIG.CELL_SIZE
+                );
+                
+                CanvasUtils.drawRoundedRect(
+                    this.ctx,
+                    canvasPos.x + 2,
+                    canvasPos.y + 2,
+                    GAME_CONFIG.CELL_SIZE - 4,
+                    GAME_CONFIG.CELL_SIZE - 4,
+                    5,
+                    wall.getColor()
+                );
+            });
+        });
+
+        // Dibujar muro siendo colocado
+        if (this.wallManager.currentWallBeingPlaced) {
+            this.wallManager.currentWallBeingPlaced.positions.forEach(pos => {
+                const canvasPos = CanvasUtils.getCanvasFromCell(
+                    pos.x, 
+                    pos.y, 
+                    GAME_CONFIG.CELL_SIZE
+                );
+                
+                CanvasUtils.drawRoundedRect(
+                    this.ctx,
+                    canvasPos.x + 2,
+                    canvasPos.y + 2,
+                    GAME_CONFIG.CELL_SIZE - 4,
+                    GAME_CONFIG.CELL_SIZE - 4,
+                    5,
+                    this.wallManager.currentWallBeingPlaced.getColor(),
+                    '#ffffff'
+                );
+            });
+        }
+    }
+
+    // Renderizar efectos de baldosas
+    renderTileEffects() {
+        if (!this.tileEffects) return;
+        for (let y = 0; y < this.gridSize; y++) {
+            for (let x = 0; x < this.gridSize; x++) {
+                const eff = this.tileEffects.getEffect(x, y);
+                if (!eff) continue;
+                const color = GAME_CONFIG.TILE_COLORS[eff] || '#555555';
+                const canvasPos = CanvasUtils.getCanvasFromCell(x, y, GAME_CONFIG.CELL_SIZE);
+                CanvasUtils.drawRoundedRect(
+                    this.ctx,
+                    canvasPos.x + 6,
+                    canvasPos.y + 6,
+                    GAME_CONFIG.CELL_SIZE - 12,
+                    GAME_CONFIG.CELL_SIZE - 12,
+                    6,
+                    color
+                );
+            }
+        }
+    }
+
+    // Renderizar fruta
+    renderFruit() { /* obsoleto mantenido temporalmente */ }
+
+    renderFruits() {
+        this.fruits.forEach(fruit => {
+            const canvasPos = CanvasUtils.getCanvasFromCell(
+                fruit.position.x,
+                fruit.position.y,
+                GAME_CONFIG.CELL_SIZE
+            );
+            CanvasUtils.drawCircle(
+                this.ctx,
+                canvasPos.x + GAME_CONFIG.CELL_SIZE / 2,
+                canvasPos.y + GAME_CONFIG.CELL_SIZE / 2,
+                (GAME_CONFIG.CELL_SIZE / 2) - (fruit.type === 'golden' ? 1 : 3),
+                fruit.getColor(),
+                fruit.type === 'golden' ? '#FFFFFF' : null
+            );
+            if (fruit.type === 'golden') {
+                // Dibujar símbolo '$' para identificar Manzana Dorada
+                this.ctx.fillStyle = '#2b2b2b';
+                this.ctx.font = 'bold 16px Arial';
+                this.ctx.textAlign = 'center';
+                this.ctx.textBaseline = 'middle';
+                this.ctx.fillText('$', canvasPos.x + GAME_CONFIG.CELL_SIZE / 2, canvasPos.y + GAME_CONFIG.CELL_SIZE / 2 + 1);
+            }
+        });
+    }
+
+    // Renderizar serpiente
+    renderSnake() {
+        this.snake.body.forEach((segment, index) => {
+            const canvasPos = CanvasUtils.getCanvasFromCell(
+                segment.x,
+                segment.y,
+                GAME_CONFIG.CELL_SIZE
+            );
+            
+            const isHead = index === 0;
+            const color = isHead ? 
+                         GAME_CONFIG.COLORS.SNAKE_HEAD : 
+                         GAME_CONFIG.COLORS.SNAKE_BODY;
+            
+            CanvasUtils.drawRoundedRect(
+                this.ctx,
+                canvasPos.x + 1,
+                canvasPos.y + 1,
+                GAME_CONFIG.CELL_SIZE - 2,
+                GAME_CONFIG.CELL_SIZE - 2,
+                isHead ? 8 : 4,
+                color
+            );
+        });
+
+        // Efecto visual para boost
+        if (this.snake.isBoostActive()) {
+            const head = this.snake.getHead();
+            const canvasPos = CanvasUtils.getCanvasFromCell(
+                head.x,
+                head.y,
+                GAME_CONFIG.CELL_SIZE
+            );
+            
+            CanvasUtils.drawCircle(
+                this.ctx,
+                canvasPos.x + GAME_CONFIG.CELL_SIZE / 2,
+                canvasPos.y + GAME_CONFIG.CELL_SIZE / 2,
+                GAME_CONFIG.CELL_SIZE / 2 + 5,
+                null,
+                '#FFC107'
+            );
+        }
+    }
+
+    // Renderizar overlay del modo edición
+    renderEditModeOverlay() {
+        this.ctx.fillStyle = 'rgba(255, 215, 0, 0.1)';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Mostrar instrucciones
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = '16px Arial';
+        this.ctx.textAlign = 'center';
+
+        let y = 30;
+        // Instrucciones de colocación de muros
+        if (this.wallManager.placementMode) {
+            this.ctx.fillText(`Colocando ${this.wallManager.placementMode}. Haz clic para colocar.`, this.canvas.width / 2, y);
+            y += 20;
+        } else {
+            this.ctx.fillText('Modo Edición: Haz clic en muros para remover.', this.canvas.width / 2, y);
+            y += 20;
+        }
+
+        // Instrucciones de baldosas
+        const invText = `PC ${this.tileInventory.PC_MULT} | SPD ${this.tileInventory.SPEED}`;
+        if (this.tilePlacementMode) {
+            const typeText = this.tilePlacementType === TILE_EFFECTS.SPEED ? 'SPD' : 'PC';
+            this.ctx.fillText(`Baldosas: Click para colocar [${typeText}] • Shift+Click para remover • Inv: ${invText}`, this.canvas.width / 2, y);
+            y += 20;
+        } else {
+            if ((this.tileInventory.PC_MULT + this.tileInventory.SPEED) > 0) {
+                this.ctx.fillText(`Baldosas disponibles (${invText}). Usa el botón Baldosas para activar y alternar tipo.`, this.canvas.width / 2, y);
+                y += 20;
+            }
+        }
+    }
+
+    // Actualizar tamaño del canvas
+    updateCanvasSize() {
+        const size = this.gridSize * GAME_CONFIG.CELL_SIZE;
+        this.canvas.width = size;
+        this.canvas.height = size;
+        
+        // Actualizar objetos del juego
+        if (this.snake) {
+            this.snake.updateGridSize(this.gridSize);
+        }
+        if (this.fruit) {
+            this.fruit.updateGridSize(this.gridSize, this.snake ? this.snake.getOccupiedPositions() : []);
+        }
+    }
+
+    // Actualizar UI
+    updateUI() {
+        const stats = this.stats.getDisplayStats();
+        
+        this.pcCounter.textContent = FormatUtils.formatNumber(stats.growthPoints);
+        this.lengthCounter.textContent = FormatUtils.formatNumber(stats.currentLength);
+        this.maxLengthCounter.textContent = FormatUtils.formatNumber(stats.maxLength);
+        this.cmCounter.textContent = FormatUtils.formatNumber(stats.mutantCells);
+
+        // Mini-HUD: efectos activos en la celda de la cabeza
+        let tileBonus = 0;
+        let speedMult = 1.0;
+        const head = this.snake ? this.snake.getHead() : null;
+        if (head && this.tileEffects) {
+            const eff = this.tileEffects.getEffect(head.x, head.y);
+            if (eff === TILE_EFFECTS.PC_MULT) tileBonus += 1; // ajustar si se cambia diseño de bonus
+            if (typeof getSpeedMultiplierForCell === 'function') {
+                speedMult = getSpeedMultiplierForCell(this.tileEffects, head.x, head.y) || 1.0;
+            }
+        }
+        if (this.pcTileBonusEl) this.pcTileBonusEl.textContent = `+${tileBonus}`;
+        if (this.speedMultEl) this.speedMultEl.textContent = `x${speedMult.toFixed(1)}`;
+        
+        // Actualizar mejoras
+        this.upgradeUI.updateUI(this.stats);
+        
+        // Actualizar botón de modo edición
+        this.editModeBtn.disabled = this.wallManager.getInventoryStatus().portal === 0 && 
+                                    this.wallManager.getInventoryStatus().repulsion === 0 && 
+                                    this.wallManager.getInventoryStatus().boost === 0 &&
+                                    this.wallManager.walls.length === 0 &&
+                                    (this.tileInventory.PC_MULT + this.tileInventory.SPEED) === 0;
+        const totalInv = (this.tileInventory.PC_MULT + this.tileInventory.SPEED);
+        if (this.tilePlaceBtn) {
+            const invText = `PC ${this.tileInventory.PC_MULT} | SPD ${this.tileInventory.SPEED}`;
+            this.tilePlaceBtn.textContent = this.tilePlacementMode ? `Salir Baldosas (${invText})` : `Baldosas (${invText})`;
+            this.tilePlaceBtn.disabled = totalInv <= 0;
+        }
+        // Mostrar/ocultar y habilitar radios según modo e inventario
+        if (this.tileTypeControls) {
+            this.tileTypeControls.style.display = (this.isEditMode && this.tilePlacementMode) ? 'flex' : 'none';
+            if (this.tileInvText) this.tileInvText.textContent = `PC ${this.tileInventory.PC_MULT} | SPD ${this.tileInventory.SPEED}`;
+            if (this.tileTypePcRadio) {
+                this.tileTypePcRadio.disabled = this.tileInventory.PC_MULT <= 0;
+                this.tileTypePcRadio.checked = (this.tilePlacementType === TILE_EFFECTS.PC_MULT);
+            }
+            if (this.tileTypeSpdRadio) {
+                this.tileTypeSpdRadio.disabled = this.tileInventory.SPEED <= 0;
+                this.tileTypeSpdRadio.checked = (this.tilePlacementType === TILE_EFFECTS.SPEED);
+            }
+        }
+    }
+
+    // Comprar mejora
+    purchaseUpgrade(upgradeId) {
+        const success = this.upgradeManager.purchaseUpgrade(
+            upgradeId, 
+            this.stats, 
+            this.wallManager
+        );
+        
+        if (success) {
+            if (upgradeId === 'expansion') {
+                // Nuevo tamaño incremental: +1 por nivel hasta 25
+                const targetSize = GAME_CONFIG.INITIAL_GRID_SIZE + this.upgradeManager.getUpgrade('expansion').currentLevel;
+                if (targetSize <= 25) {
+                    this.resetGame(targetSize, { preserveStats: true });
+                }
+            } else if (upgradeId === 'cultivo') {
+                this.ensureFruitPopulation();
+            } else if (upgradeId === 'tile_pc') {
+                this.tileInventory.PC_MULT = (this.tileInventory.PC_MULT || 0) + 1;
+            } else if (upgradeId === 'tile_speed') {
+                this.tileInventory.SPEED = (this.tileInventory.SPEED || 0) + 1;
+            }
+            
+            this.updateUI();
+            this.saveGameState();
+            
+            Logger.log(`Mejora ${upgradeId} comprada exitosamente`);
+        }
+        
+        return success;
+    }
+
+    // Iniciar colocación de muro
+    startWallPlacement(wallType) {
+        if (this.wallManager.startPlacement(wallType)) {
+            this.isEditMode = true;
+            this.canvas.classList.add('edit-mode-active');
+            this.updateEditModeButton();
+            return true;
+        }
+        return false;
+    }
+
+    // Toggle pausa
+    togglePause() {
+        this.isPaused = !this.isPaused;
+        this.pauseBtn.textContent = this.isPaused ? 'Reanudar' : 'Pausar';
+        Logger.log(this.isPaused ? 'Juego pausado' : 'Juego reanudado');
+    }
+
+    // Toggle modo edición
+    toggleEditMode() {
+        this.isEditMode = !this.isEditMode;
+        
+        if (!this.isEditMode) {
+            this.wallManager.cancelPlacement();
+        }
+        
+    this.canvas.classList.toggle('edit-mode-active', this.isEditMode);
+    this.updateEditModeButton();
+    if (!this.isEditMode && this.tilePlacementMode) this.tilePlacementMode = false;
+    }
+
+    // Actualizar botón de modo edición
+    updateEditModeButton() {
+        this.editModeBtn.textContent = this.isEditMode ? 'Salir Edición' : 'Modo Edición';
+    }
+
+    // Iniciar bucle del juego
+    startGameLoop() {
+        if (!this.gameLoopId) {
+            this.lastUpdateTime = 0;
+            this.gameLoopId = requestAnimationFrame((time) => this.gameLoop(time));
+            Logger.log('Bucle del juego iniciado');
+        }
+    }
+
+    // Detener bucle del juego
+    stopGameLoop() {
+        if (this.gameLoopId) {
+            cancelAnimationFrame(this.gameLoopId);
+            this.gameLoopId = null;
+            Logger.log('Bucle del juego detenido');
+        }
+    }
+
+    // Mostrar que la mutación está disponible
+    showMutationAvailable() {
+        // Mostrar sección de prestigio
+        const prestigeSection = document.querySelector('.prestige-section');
+        if (prestigeSection) {
+            prestigeSection.style.display = 'block';
+        }
+        
+        Logger.log('¡Mutación disponible!');
+    }
+
+    // Realizar mutación
+    performMutation() {
+        if (this.stats.performMutation()) {
+            this.upgradeManager.resetForMutation();
+            this.wallManager.resetForMutation();
+            
+            // Reiniciar juego
+            this.gridSize = this.upgradeManager.getCurrentGridSize();
+            this.updateCanvasSize();
+            this.restartRun();
+            
+            this.updateUI();
+            this.saveGameState();
+            
+            Logger.log('¡Mutación realizada exitosamente!');
+            return true;
+        }
+        
+        return false;
+    }
+
+    // Mostrar completación de colocación de muro
+    showWallPlacementComplete() {
+        Logger.log('Muro colocado exitosamente');
+        // Aquí se podría mostrar una notificación visual
+    }
+
+    // Mostrar error de colocación de muro
+    showWallPlacementError() {
+        Logger.warn('No se pudo colocar el muro en esa posición');
+        // Aquí se podría mostrar una notificación visual
+    }
+
+    // Guardar estado del juego
+    saveGameState() {
+        this.stats.save();
+        this.upgradeManager.save();
+        this.wallManager.save();
+        Logger.log('Estado del juego guardado');
+        if (this.tileEffects) StorageUtils.save('tileEffects', this.tileEffects.serialize());
+        StorageUtils.save('tileInventory', this.tileInventory);
+    }
+
+    // Cargar estado del juego
+    loadGameState() {
+        this.stats.load();
+        this.upgradeManager.load();
+        this.wallManager.load();
+        // Mantener grid inicial base (expansiones futuras usarán resetGame)
+        this.gridSize = GAME_CONFIG.INITIAL_GRID_SIZE;
+        this.updateCanvasSize();
+        const te = StorageUtils.load('tileEffects', null);
+        if (te) {
+            this.tileEffects = TileEffectMap.deserialize(te);
+        } else {
+            this.tileEffects = new TileEffectMap(this.gridSize);
+        }
+    this.tileInventory = StorageUtils.load('tileInventory', { PC_MULT: 0, SPEED: 0 });
+        this.updateUI();
+        Logger.log('Estado del juego cargado');
+    }
+
+    /**
+     * Reinicia el estado dinámico del juego ajustando opcionalmente el tamaño de la cuadrícula.
+     * @param {number} newSize - Nuevo tamaño de la cuadrícula. Si se omite, se reutiliza el actual.
+     * @param {object} options - Opciones de reinicio.
+     * @param {boolean} options.preserveStats - Si true, mantiene growthPoints, mutaciones y totales.
+     */
+    resetGame(newSize, options = {}) {
+        const { preserveStats = false } = options;
+        if (typeof newSize === 'number' && newSize > 0 && newSize !== this.gridSize) {
+            this.gridSize = newSize;
+        }
+        this.updateCanvasSize();
+        // Re-centrar serpiente
+        if (!this.snake) this.snake = new Snake(this.gridSize); else this.snake.gridSize = this.gridSize;
+        const center = Math.floor(this.gridSize / 2);
+        this.snake.body = [
+            { x: center, y: center },
+            { x: center - 1, y: center },
+            { x: center - 2, y: center }
+        ];
+        this.snake.direction = DIRECTIONS.RIGHT;
+        this.snake.nextDirection = DIRECTIONS.RIGHT;
+        this.snake.length = GAME_CONFIG.INITIAL_SNAKE_LENGTH;
+        this.snake.isAlive = true;
+        this.snake.firstMoveDone = false;
+    // Frutas múltiples
+        this.fruits = [];
+        this.ensureFruitPopulation();
+    // Redimensionar efectos de baldosa
+    if (this.tileEffects) this.tileEffects.resize(this.gridSize); else this.tileEffects = new TileEffectMap(this.gridSize);
+        // Limpiar pathfinding
+        if (this.pathfindingAI) this.pathfindingAI.reset();
+        // Reset muros para nueva partida (estructura de campo, conservar inventario interno)
+        if (this.wallManager) this.wallManager.resetForNewGame();
+        // Stats
+        if (!preserveStats) {
+            this.stats.currentLength = GAME_CONFIG.INITIAL_SNAKE_LENGTH;
+        } else {
+            this.stats.currentLength = GAME_CONFIG.INITIAL_SNAKE_LENGTH; // (en esta fase igual)
+        }
+        this.stats.maxLength = Math.max(this.stats.maxLength, this.stats.currentLength);
+        this.updateUI();
+        Logger.log(`resetGame aplicado. gridSize=${this.gridSize}`);
+    }
+
+    // Obtener información de debug
+    getDebugInfo() {
+        return {
+            gameState: {
+                isPaused: this.isPaused,
+                isEditMode: this.isEditMode,
+                gridSize: this.gridSize
+            },
+            snake: this.snake.getDebugInfo(),
+            stats: this.stats.getDisplayStats(),
+            upgrades: this.upgradeManager.getDebugInfo(),
+            walls: this.wallManager.getInventoryStatus()
+        };
+    }
+
+    // Seleccionar fruta objetivo para la IA: prioridad golden; si no hay, la más cercana por Manhattan
+    chooseTargetFruit() {
+        if (!this.fruits || this.fruits.length === 0) return { position: this.snake.getHead() }; // fallback
+        const golden = this.fruits.find(f => f.type === 'golden');
+        if (golden) return golden;
+        const head = this.snake.getHead();
+        let best = null; let bestDist = Infinity;
+        for (const f of this.fruits) {
+            const d = Math.abs(f.position.x - head.x) + Math.abs(f.position.y - head.y);
+            if (d < bestDist) { bestDist = d; best = f; }
+        }
+        return best || this.fruits[0];
+    }
+
+    toggleTilePlacementMode() {
+        if ((this.tileInventory.PC_MULT + this.tileInventory.SPEED) <= 0) {
+            this.tilePlacementMode = false;
+            this.updateUI();
+            return;
+        }
+        this.tilePlacementMode = !this.tilePlacementMode;
+        this.syncTileTypeRadios();
+        this.updateUI();
+    }
+
+    placeOrRemoveTileEffect(x, y, remove = false) {
+        // Política de remoción: el juego no descuenta PC al colocar baldosas; por lo tanto,
+        // al remover (Shift+Click) devolvemos la baldosa completa al inventario y no hay reembolso de PC.
+        const existing = this.tileEffects.getEffect(x, y);
+        if (remove) {
+            if (!existing) return;
+            if (this.tileEffects.removeEffect(x, y)) {
+                // Devolución: recuperar al inventario 1 unidad del tipo removido
+                if (existing === TILE_EFFECTS.PC_MULT) this.tileInventory.PC_MULT = (this.tileInventory.PC_MULT || 0) + 1;
+                if (existing === TILE_EFFECTS.SPEED) this.tileInventory.SPEED = (this.tileInventory.SPEED || 0) + 1;
+                this.updateUI();
+            }
+            return;
+        }
+        if (existing) return; // no sobrescribir
+        if (this.tilePlacementType === TILE_EFFECTS.SPEED) {
+            if (this.tileInventory.SPEED <= 0) return;
+            if (this.tileEffects.setEffect(x, y, TILE_EFFECTS.SPEED)) {
+                this.tileInventory.SPEED--;
+            }
+        } else {
+            if (this.tileInventory.PC_MULT <= 0) return;
+            if (this.tileEffects.setEffect(x, y, TILE_EFFECTS.PC_MULT)) {
+                this.tileInventory.PC_MULT--;
+            }
+        }
+        this.updateUI();
+    }
+
+    syncTileTypeRadios() {
+        if (!this.tileTypeControls) return;
+        if (this.tileInvText) this.tileInvText.textContent = `PC ${this.tileInventory.PC_MULT} | SPD ${this.tileInventory.SPEED}`;
+        if (this.tileTypePcRadio) {
+            this.tileTypePcRadio.disabled = this.tileInventory.PC_MULT <= 0;
+            this.tileTypePcRadio.checked = (this.tilePlacementType === TILE_EFFECTS.PC_MULT);
+        }
+        if (this.tileTypeSpdRadio) {
+            this.tileTypeSpdRadio.disabled = this.tileInventory.SPEED <= 0;
+            this.tileTypeSpdRadio.checked = (this.tilePlacementType === TILE_EFFECTS.SPEED);
+        }
+    }
+}
+
+// Exportar si se usa en módulos
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { IdleSnakeGame };
+}
