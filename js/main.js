@@ -323,27 +323,83 @@ function setupDeveloperTools() {
 🍎 spawnGolden() - Convertir primera fruta en dorada
 🧪 testPrestige() - Preparar condiciones para prestigio
 🔄 hardReset() - Reset nuclear (limpia TODO sin confirmación)
+🔍 checkState() - Mostrar estado actual de upgrades
 ❓ help() - Mostrar esta ayuda
         `);
     };
 
+    window.checkState = () => {
+        if (typeof game !== 'undefined' && game) {
+            console.log("🔍 ESTADO ACTUAL DEL JUEGO:");
+            console.log("Grid Size:", game.gridSize);
+            console.log("Money:", game.stats?.money || 0);
+            console.log("DNA:", game.stats?.pureDNA || 0);
+            console.log("Has Prestiged:", game.stats?.getHasPrestiged?.() || false);
+            
+            if (game.upgradeManager && game.upgradeManager.upgrades) {
+                console.log("📦 UPGRADES ACTIVOS:");
+                Object.entries(game.upgradeManager.upgrades).forEach(([key, upgrade]) => {
+                    if (upgrade.currentLevel > 0) {
+                        console.log(`  ${key}: nivel ${upgrade.currentLevel}`);
+                    }
+                });
+            }
+            
+            console.log("💾 LOCALSTORAGE:");
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                console.log(`  ${key}: ${localStorage.getItem(key).substring(0, 100)}...`);
+            }
+        } else {
+            console.log("❌ Objeto game no encontrado");
+        }
+    };
+
     window.hardReset = () => {
         // Reset nuclear sin confirmación - para debugging
+        console.log("🚀 Iniciando HARD RESET...");
+        
+        // Paso 1: Limpiar TODOS los storages
         localStorage.clear();
         sessionStorage.clear();
         
-        // Forzar limpieza del estado global
-        if (typeof game !== 'undefined' && game && game.stats) {
-            game.stats.hasPrestiged = false;
-            game.stats.setHasPrestiged(false);
-            game.stats.pureDNA = 0;
-            game.stats.money = 0;
+        // Paso 2: Forzar reset completo del objeto game si existe
+        if (typeof game !== 'undefined' && game) {
+            try {
+                // Reset stats
+                if (game.stats) {
+                    game.stats.hasPrestiged = false;
+                    game.stats.setHasPrestiged(false);
+                    game.stats.pureDNA = 0;
+                    game.stats.money = 0;
+                    game.stats.maxLength = 3;
+                }
+                
+                // Reset upgrade manager
+                if (game.upgradeManager) {
+                    game.upgradeManager.upgrades = {};
+                }
+                
+                // Reset grid size
+                if (game.gridSize) {
+                    game.gridSize = 5;
+                }
+                
+                console.log("💀 Estado del juego destruido");
+            } catch (e) {
+                console.log("❌ Error limpiando estado:", e);
+            }
         }
         
-        console.log("🚀 HARD RESET ejecutado - recargando página...");
+        // Paso 3: Limpiar el objeto game completamente
+        if (typeof window.game !== 'undefined') {
+            delete window.game;
+        }
+        
+        console.log("🚀 HARD RESET completado - recargando página...");
         setTimeout(() => {
             window.location.href = window.location.href.split('?')[0] + '?hardreset=' + Date.now();
-        }, 100);
+        }, 150);
     };
     
     window.toggleGodMode = () => {
