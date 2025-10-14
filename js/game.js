@@ -8,27 +8,35 @@ class IdleSnakeGame {
         this.pauseBtn = document.getElementById('pause-btn');
     this.editModeBtn = document.getElementById('edit-mode-btn');
     this.tilePlaceBtn = document.getElementById('tile-place-btn');
+    this.basketPlaceBtn = document.getElementById('basket-place-btn');
     this.tileTypeControls = document.getElementById('tile-type-controls');
     this.tileTypePcRadio = document.getElementById('tile-type-pc');
     this.tileTypeSpdRadio = document.getElementById('tile-type-spd');
     this.tileInvText = document.getElementById('tile-inv-text');
         
-        // Elementos de estadísticas
+    // Elementos de estadísticas
         this.pcCounter = document.getElementById('pc-counter');
         this.lengthCounter = document.getElementById('length-counter');
         this.maxLengthCounter = document.getElementById('max-length-counter');
         this.cmCounter = document.getElementById('cm-counter');
     this.pcTileBonusEl = document.getElementById('pc-tile-bonus');
     this.speedMultEl = document.getElementById('speed-mult');
+    // Mini-HUD
+    this.miniHud = document.getElementById('mini-hud');
+    this.miniHudPc = document.getElementById('mini-hud-pc');
+    this.miniHudSpd = document.getElementById('mini-hud-speed');
 
         // Estado del juego
         this.isPaused = false;
     this.isEditMode = false;
     this.tilePlacementMode = false;
+    this.basketPlacementMode = false;
     this.tilePlacementType = (typeof TILE_EFFECTS !== 'undefined' && TILE_EFFECTS.PC_MULT) ? TILE_EFFECTS.PC_MULT : 'PC_MULT';
     this.tileInventory = { PC_MULT: 0, SPEED: 0 };
-        this.gameLoopId = null;
-        this.lastUpdateTime = 0;
+    this.gameLoopId = null;
+    this.lastUpdateTime = 0;
+    // Prestigio
+    this.prestigeReady = false;
 
         // Inicializar sistemas del juego
         this.initializeGame();
@@ -48,8 +56,10 @@ class IdleSnakeGame {
     this.tileEffects = new TileEffectMap(this.gridSize);
         
         // Inicializar tamaño de cuadrícula (arranca siempre en base y expansión futura ajustará)
-        this.gridSize = GAME_CONFIG.INITIAL_GRID_SIZE; // expansión futura modificará via resetGame()
+    this.gridSize = GAME_CONFIG.INITIAL_GRID_SIZE; // expansión futura modificará via resetGame()
         this.updateCanvasSize();
+    // Inicializar cestas
+    this.basketMap = new BasketMap(this.gridSize);
         
         // Inicializar entidades principales
         this.snake = new Snake(this.gridSize);
@@ -97,6 +107,14 @@ class IdleSnakeGame {
                     }
                 }
                 this.syncTileTypeRadios();
+                this.updateUI();
+            });
+        }
+        if (this.basketPlaceBtn) {
+            this.basketPlaceBtn.addEventListener('click', () => {
+                if (!this.isEditMode) this.toggleEditMode();
+                if (!this.stats.getHasPrestiged()) return;
+                this.basketPlacementMode = !this.basketPlacementMode;
                 this.updateUI();
             });
         }
@@ -148,6 +166,28 @@ class IdleSnakeGame {
         );
 
         if (!MathUtils.isValidPosition(cellPosition, this.gridSize)) return;
+        // Colocación de Cestas (click normal para colocar, Shift+Click para remover)
+        if (this.basketPlacementMode && this.stats.getHasPrestiged()) {
+            const x = cellPosition.x, y = cellPosition.y;
+            const removing = e.shiftKey === true;
+            if (removing) {
+                if (this.basketMap.isBasket(x, y)) {
+                    this.basketMap.removeBasket(x, y);
+                    this.stats.addBasket(1);
+                    this.updateUI();
+                    this.saveGameState();
+                }
+                return;
+            }
+            if (!this.basketMap.isBasket(x, y) && this.stats.basketInventory > 0 && !this.snake.isPositionOccupied(cellPosition) && !this.wallManager.isPositionOccupied(cellPosition)) {
+                if (this.stats.useBasket()) {
+                    this.basketMap.setBasket(x, y);
+                    this.updateUI();
+                    this.saveGameState();
+                }
+            }
+            return;
+        }
         if (this.tilePlacementMode) {
             const remove = e.shiftKey === true;
             this.placeOrRemoveTileEffect(cellPosition.x, cellPosition.y, remove);
@@ -310,17 +350,24 @@ class IdleSnakeGame {
     // Manejar cuando se come una fruta
     handleFruitEaten(fruit) {
         this.snake.grow();
-        const multiplier = this.upgradeManager.getCurrentPCMultiplier();
+        // Base: multiplicador de upgrades + bonus por baldosa en la celda de la fruta
+        const baseMult = this.upgradeManager.getCurrentPCMultiplier();
+        const pos = fruit.position;
         let tileBonus = 0;
-        const head = this.snake.getHead();
-        const effect = this.tileEffects ? this.tileEffects.getEffect(head.x, head.y) : null;
+        const effect = this.tileEffects ? this.tileEffects.getEffect(pos.x, pos.y) : null;
         if (effect === TILE_EFFECTS.PC_MULT) tileBonus += 1;
-        const reward = fruit.getRewardBase(multiplier) + tileBonus;
+        let reward = baseMult + tileBonus;
+        // Cesta: multiplicador si hay cesta en la celda
+        if (this.stats.getHasPrestiged() && this.basketMap && this.basketMap.isBasket(pos.x, pos.y)) {
+            reward = Math.floor(reward * (this.stats.basketMultiplier || 1));
+        }
+        // Dorada post-prestigio: multiplicador global
+        if (this.stats.getHasPrestiged() && fruit.type === 'golden') {
+            const gm = GAME_CONFIG.ECONOMY?.GOLDEN_FRUIT_MULTIPLIER_BASE ?? 10;
+            reward = Math.floor(reward * gm);
+        }
         this.stats.eatFruit(reward);
         if (fruit.type === 'golden') Logger.log('Golden Apple consumida');
-        if (this.stats.canMutate() && !document.querySelector('.prestige-section').style.display !== 'none') {
-            this.showMutationAvailable();
-        }
         Logger.log(`Fruta comida (${fruit.type}). PC ganados: ${reward}`);
     }
 
@@ -340,13 +387,30 @@ class IdleSnakeGame {
         let attempts = 0; const maxAttempts = 100;
         while (attempts < maxAttempts) {
             const f = new Fruit(this.gridSize);
-            // Golden 2%
-            if (Math.random() < 0.02) f.setType('golden');
-            f.generateNewPosition([
+            // Doradas solo tras prestigio
+            if (this.stats.getHasPrestiged()) {
+                const goldenChance = GAME_CONFIG.ECONOMY?.GOLDEN_FRUIT_CHANCE_BASE ?? 0.01;
+                if (Math.random() < goldenChance) f.setType('golden');
+            }
+            const exclude = [
                 ...this.snake.getOccupiedPositions(),
                 ...this.wallManager.getAllWallPositions(),
                 ...this.fruits?.map(fr => fr.position) || []
-            ]);
+            ];
+            // Viés hacia cestas: 70% si hay cestas libres
+            let candidate = null;
+            if (this.stats.getHasPrestiged() && this.basketMap) {
+                const baskets = this.basketMap.getAllBasketPositions();
+                const free = baskets.filter(p => !exclude.some(ep => ep.x === p.x && ep.y === p.y));
+                if (free.length > 0 && Math.random() < 0.7) {
+                    candidate = free[Math.floor(Math.random() * free.length)];
+                }
+            }
+            if (candidate) {
+                f.position = { x: candidate.x, y: candidate.y };
+            } else {
+                f.generateNewPosition(exclude);
+            }
             // Validar repulsión
             if (!this.wallManager.checkFruitRepulsion || !this.wallManager.checkFruitRepulsion(f)) {
                 return f;
@@ -376,6 +440,8 @@ class IdleSnakeGame {
         
         // Dibujar fruta
     if (this.fruits) this.renderFruits();
+        // Dibujar cestas (debajo de serpiente)
+        this.renderBaskets();
         
         // Dibujar serpiente
         this.renderSnake();
@@ -384,6 +450,9 @@ class IdleSnakeGame {
         if (this.isEditMode) {
             this.renderEditModeOverlay();
         }
+
+        // Actualizar y posicionar Mini-HUD cerca de la cabeza
+        this.updateMiniHUDPositionAndValues();
     }
 
     // Renderizar muros
@@ -479,6 +548,33 @@ class IdleSnakeGame {
                 this.ctx.textBaseline = 'middle';
                 this.ctx.fillText('$', canvasPos.x + GAME_CONFIG.CELL_SIZE / 2, canvasPos.y + GAME_CONFIG.CELL_SIZE / 2 + 1);
             }
+        });
+    }
+
+    renderBaskets() {
+        if (!this.basketMap) return;
+        const positions = this.basketMap.getAllBasketPositions();
+        positions.forEach(pos => {
+            const canvasPos = CanvasUtils.getCanvasFromCell(
+                pos.x,
+                pos.y,
+                GAME_CONFIG.CELL_SIZE
+            );
+            CanvasUtils.drawRoundedRect(
+                this.ctx,
+                canvasPos.x + 8,
+                canvasPos.y + 8,
+                GAME_CONFIG.CELL_SIZE - 16,
+                GAME_CONFIG.CELL_SIZE - 16,
+                6,
+                'rgba(255,215,0,0.18)',
+                '#FFD700'
+            );
+            this.ctx.fillStyle = '#FFD700';
+            this.ctx.font = 'bold 12px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText('C', canvasPos.x + GAME_CONFIG.CELL_SIZE / 2, canvasPos.y + GAME_CONFIG.CELL_SIZE / 2);
         });
     }
 
@@ -587,20 +683,38 @@ class IdleSnakeGame {
 
         // Mini-HUD: efectos activos en la celda de la cabeza
         let tileBonus = 0;
-        let speedMult = 1.0;
+        let speedMultTile = 1.0;
         const head = this.snake ? this.snake.getHead() : null;
         if (head && this.tileEffects) {
             const eff = this.tileEffects.getEffect(head.x, head.y);
             if (eff === TILE_EFFECTS.PC_MULT) tileBonus += 1; // ajustar si se cambia diseño de bonus
             if (typeof getSpeedMultiplierForCell === 'function') {
-                speedMult = getSpeedMultiplierForCell(this.tileEffects, head.x, head.y) || 1.0;
+                speedMultTile = getSpeedMultiplierForCell(this.tileEffects, head.x, head.y) || 1.0;
             }
         }
-        if (this.pcTileBonusEl) this.pcTileBonusEl.textContent = `+${tileBonus}`;
-        if (this.speedMultEl) this.speedMultEl.textContent = `x${speedMult.toFixed(1)}`;
+    if (this.pcTileBonusEl) this.pcTileBonusEl.textContent = `+${tileBonus}`;
+    // Mostrar multiplicador total de velocidad (upgrades * tile * boost)
+    const baseSpeed = GAME_CONFIG.INITIAL_SPEED;
+    const currentSpeed = this.upgradeManager.getCurrentSpeed();
+    const baseMult = Math.max(0.1, baseSpeed / currentSpeed);
+    const boostMult = this.snake && this.snake.isBoostActive() ? 3 : 1;
+    const totalSpeedMult = baseMult * speedMultTile * boostMult;
+    if (this.speedMultEl) this.speedMultEl.textContent = `x${totalSpeedMult.toFixed(1)}`;
+    // Mini-HUD texto
+    if (this.miniHudPc) this.miniHudPc.textContent = `+${tileBonus} PC`;
+    if (this.miniHudSpd) this.miniHudSpd.textContent = `x${speedMultTile.toFixed(1)} SPD`;
         
         // Actualizar mejoras
         this.upgradeUI.updateUI(this.stats);
+        // Gestionar visibilidad/estado de Prestigio (para la carta en tienda)
+        const prestigeSection = document.querySelector('.prestige-section');
+        const pcThreshold = (GAME_CONFIG.ECONOMY && GAME_CONFIG.ECONOMY.PRESTIGE_PC_THRESHOLD) ? GAME_CONFIG.ECONOMY.PRESTIGE_PC_THRESHOLD : 10000;
+        const gridCap = this.stats.getHasPrestiged() ? 15 : 10;
+        this.prestigeReady = (this.gridSize >= gridCap) && (this.stats.growthPoints >= pcThreshold);
+        if (prestigeSection) {
+            const showPrestige = this.stats.getHasPrestiged() || (this.gridSize >= gridCap);
+            prestigeSection.style.display = showPrestige ? 'block' : 'none';
+        }
         
         // Actualizar botón de modo edición
         this.editModeBtn.disabled = this.wallManager.getInventoryStatus().portal === 0 && 
@@ -627,10 +741,104 @@ class IdleSnakeGame {
                 this.tileTypeSpdRadio.checked = (this.tilePlacementType === TILE_EFFECTS.SPEED);
             }
         }
+        // Botón de Cestas
+        if (this.basketPlaceBtn) {
+            const enabled = this.stats.getHasPrestiged() && (this.stats.basketInventory > 0);
+            this.basketPlaceBtn.disabled = !enabled;
+            this.basketPlaceBtn.textContent = enabled ? `Cestas (${this.stats.basketInventory})` : 'Cestas';
+        }
+        // Botón de Cestas
+        if (this.basketPlaceBtn) {
+            const enabled = this.stats.getHasPrestiged() && (this.stats.basketInventory > 0);
+            this.basketPlaceBtn.disabled = !enabled;
+            this.basketPlaceBtn.textContent = enabled ? `Cestas (${this.stats.basketInventory})` : 'Cestas';
+        }
+    }
+
+    // La carta de Prestigio ahora vive en la tienda; no necesitamos un botón separado aquí
+
+    performPrestige() {
+        if (!this.prestigeReady) return false;
+        // Recompensa
+        this.stats.mutantCells += 1;
+        this.stats.setHasPrestiged(true);
+        // Reset de mejoras e inventarios del run
+        this.upgradeManager.resetForMutation();
+        this.wallManager.resetForMutation();
+        // Reset cestas iniciales post-prestigio
+        if (typeof BasketMap !== 'undefined') {
+            this.basketMap = new BasketMap(GAME_CONFIG.INITIAL_GRID_SIZE);
+        }
+        // Recalcular inventario base de cestas y multiplicador según upgrades permanentes
+        const basketCountLevel = this.upgradeManager?.getUpgrade?.('basket_count')?.currentLevel || 0;
+        const basketPowerLevel = this.upgradeManager?.getUpgrade?.('basket_power')?.currentLevel || 0;
+        this.stats.basketInventory = 1 + basketCountLevel; // base 1 + niveles permanentes
+        this.stats.basketMultiplier = 2 + basketPowerLevel; // base x2 + niveles permanentes
+        // Reiniciar juego a 5x5
+        this.gridSize = GAME_CONFIG.INITIAL_GRID_SIZE;
+        this.updateCanvasSize();
+        this.resetGame(this.gridSize, { preserveStats: false });
+        // PC y longitudes base
+        this.stats.growthPoints = 0;
+        this.stats.currentLength = GAME_CONFIG.INITIAL_SNAKE_LENGTH;
+        this.stats.maxLength = GAME_CONFIG.INITIAL_SNAKE_LENGTH;
+        // Guardar y refrescar
+        this.saveGameState();
+        this.updateUI();
+        alert('¡Prestigio realizado! +1 Célula Mutante. Se han desbloqueado Cestas y Manzanas Doradas.');
+        return true;
+    }
+
+    // Actualiza la posición del Mini-HUD para que siga a la cabeza y su visibilidad
+    updateMiniHUDPositionAndValues() {
+        if (!this.miniHud || !this.snake) return;
+        const head = this.snake.getHead();
+        if (!head) {
+            this.miniHud.style.display = 'none';
+            return;
+        }
+        // Mostrar Mini-HUD siempre que la serpiente esté viva
+        this.miniHud.style.display = this.snake.isSnakeAlive() ? 'block' : 'none';
+
+        const canvasPos = CanvasUtils.getCanvasFromCell(head.x, head.y, GAME_CONFIG.CELL_SIZE);
+        // Posicionar el Mini-HUD relativo al canvas
+        const rect = this.canvas.getBoundingClientRect();
+        const hudX = rect.left + window.scrollX + canvasPos.x + GAME_CONFIG.CELL_SIZE / 2;
+        const hudY = rect.top + window.scrollY + canvasPos.y;
+        this.miniHud.style.position = 'absolute';
+        this.miniHud.style.left = `${hudX}px`;
+        this.miniHud.style.top = `${hudY}px`;
     }
 
     // Comprar mejora
     purchaseUpgrade(upgradeId) {
+        // Manejo especial: 'prestige' como item de tienda
+        if (upgradeId === 'prestige') {
+            const pcThreshold = (GAME_CONFIG.ECONOMY && GAME_CONFIG.ECONOMY.PRESTIGE_PC_THRESHOLD) ? GAME_CONFIG.ECONOMY.PRESTIGE_PC_THRESHOLD : 10000;
+            const canAfford = this.stats.growthPoints >= pcThreshold;
+            const cap = this.stats.getHasPrestiged() ? 15 : 10;
+            const atMaxBoard = this.gridSize >= cap;
+            if (atMaxBoard && canAfford) {
+                // Gastar el coste de prestigio (PC)
+                this.stats.spendGrowthPoints(pcThreshold);
+                this.performPrestige();
+            } else {
+                Logger.warn('No cumples requisitos para prestigiar.');
+            }
+            // No continuar con flujo normal de upgrades
+            return;
+        }
+        // Bloqueo preventivo: no permitir comprar expansión más allá del cap según prestigio
+        if (upgradeId === 'expansion') {
+            const cap = this.stats.getHasPrestiged() ? 15 : 10;
+            const exp = this.upgradeManager.getUpgrade('expansion');
+            const currentLevel = exp ? exp.currentLevel : 0;
+            const maxAllowedLevel = cap - GAME_CONFIG.INITIAL_GRID_SIZE;
+            if (currentLevel >= maxAllowedLevel) {
+                Logger.warn('Expansión al máximo permitido actualmente.');
+                return false;
+            }
+        }
         const success = this.upgradeManager.purchaseUpgrade(
             upgradeId, 
             this.stats, 
@@ -639,9 +847,10 @@ class IdleSnakeGame {
         
         if (success) {
             if (upgradeId === 'expansion') {
-                // Nuevo tamaño incremental: +1 por nivel hasta 25
+                // Nuevo tamaño incremental: +1 por nivel hasta 10
                 const targetSize = GAME_CONFIG.INITIAL_GRID_SIZE + this.upgradeManager.getUpgrade('expansion').currentLevel;
-                if (targetSize <= 25) {
+                const cap = this.stats.getHasPrestiged() ? 15 : 10;
+                if (targetSize <= cap) {
                     this.resetGame(targetSize, { preserveStats: true });
                 }
             } else if (upgradeId === 'cultivo') {
@@ -767,6 +976,7 @@ class IdleSnakeGame {
         Logger.log('Estado del juego guardado');
         if (this.tileEffects) StorageUtils.save('tileEffects', this.tileEffects.serialize());
         StorageUtils.save('tileInventory', this.tileInventory);
+    if (this.basketMap) StorageUtils.save('basketMap', this.basketMap.serialize());
     }
 
     // Cargar estado del juego
@@ -784,6 +994,19 @@ class IdleSnakeGame {
             this.tileEffects = new TileEffectMap(this.gridSize);
         }
     this.tileInventory = StorageUtils.load('tileInventory', { PC_MULT: 0, SPEED: 0 });
+        const bm = StorageUtils.load('basketMap', null);
+        this.basketMap = bm ? BasketMap.deserialize(bm) : new BasketMap(this.gridSize);
+        // Recalcular inventario y multiplicador de cestas según upgrades permanentes si ya prestigió
+        if (this.stats.getHasPrestiged()) {
+            const basketCountLevel = this.upgradeManager?.getUpgrade?.('basket_count')?.currentLevel || 0;
+            const basketPowerLevel = this.upgradeManager?.getUpgrade?.('basket_power')?.currentLevel || 0;
+            // Si el save tiene menos inventario que el mínimo por upgrades, elevarlo al mínimo
+            const minInv = 1 + basketCountLevel;
+            if ((this.stats.basketInventory || 0) < minInv) this.stats.basketInventory = minInv;
+            // Alinear multiplicador al menos con el permanente
+            const minMult = 2 + basketPowerLevel;
+            if ((this.stats.basketMultiplier || 0) < minMult) this.stats.basketMultiplier = minMult;
+        }
         this.updateUI();
         Logger.log('Estado del juego cargado');
     }
@@ -818,6 +1041,12 @@ class IdleSnakeGame {
         this.ensureFruitPopulation();
     // Redimensionar efectos de baldosa
     if (this.tileEffects) this.tileEffects.resize(this.gridSize); else this.tileEffects = new TileEffectMap(this.gridSize);
+    // Cestas: preservar en muerte/expansión (preserveStats=true), limpiar solo en resets totales
+    if (preserveStats) {
+        if (this.basketMap) this.basketMap.resize(this.gridSize); else this.basketMap = new BasketMap(this.gridSize);
+    } else {
+        this.basketMap = new BasketMap(this.gridSize);
+    }
         // Limpiar pathfinding
         if (this.pathfindingAI) this.pathfindingAI.reset();
         // Reset muros para nueva partida (estructura de campo, conservar inventario interno)

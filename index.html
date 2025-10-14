@@ -37,9 +37,16 @@
         <div class="main-content">
             <div class="game-area">
                 <canvas id="game-canvas" width="600" height="600"></canvas>
+                <!-- Mini-HUD de efectos activos (flotante cerca de la cabeza) -->
+                <div id="mini-hud" class="mini-hud" aria-live="polite">
+                    <span id="mini-hud-pc">+0 PC</span>
+                    <span class="sep">|</span>
+                    <span id="mini-hud-speed">x1.0 SPD</span>
+                </div>
                 <div class="game-controls">
                     <button id="edit-mode-btn" class="control-btn" disabled>Modo Edición</button>
                     <button id="tile-place-btn" class="control-btn" disabled>Baldosas</button>
+                    <button id="basket-place-btn" class="control-btn" disabled>Cestas</button>
                     <div class="tile-type-controls" id="tile-type-controls" style="display:none;">
                         <label><input type="radio" name="tile-type" id="tile-type-pc" value="PC" checked> PC</label>
                         <label><input type="radio" name="tile-type" id="tile-type-spd" value="SPD"> SPD</label>
@@ -95,6 +102,7 @@
     <script src="js/utils.js"></script>
     <script src="js/pathfinding.js"></script>
     <script src="js/tile_effects.js"></script>
+    <script src="js/baskets.js"></script>
     <script src="js/snake.js"></script>
     <script src="js/walls.js"></script>
     <script src="js/upgrades.js"></script>

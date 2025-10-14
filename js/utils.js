@@ -23,6 +23,11 @@ const GAME_CONFIG = {
     TILE_COLORS: {
         PC_MULT: '#1E88E5',
         SPEED: '#FF9800'
+    },
+    ECONOMY: {
+        PRESTIGE_PC_THRESHOLD: 10000,
+        GOLDEN_FRUIT_CHANCE_BASE: 0.01,    // 1% tras prestigio
+        GOLDEN_FRUIT_MULTIPLIER_BASE: 10   // x10 tras prestigio
     }
 };
 

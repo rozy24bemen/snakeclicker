@@ -122,7 +122,7 @@ class UpgradeManager {
             'Aumenta el tamaño de la cuadrícula (+1 por nivel).',
             100, // costo base (escala con tamaño actual)
             'pc',
-            20 // desde 5 hasta 25 => +20 niveles posibles
+            10 // nivel técnico máximo para llegar a 15x15 si se habilita tras prestigio
         );
 
         const tilePcUpgrade = new Upgrade(
@@ -211,9 +211,29 @@ class UpgradeManager {
             3
         );
 
+        // Cestas: cantidad y multiplicador (post-prestigio)
+        const basketCountUpgrade = new Upgrade(
+            'basket_count',
+            'Cestas Adicionales',
+            'Aumenta la cantidad de cestas disponibles. Cantidad total {level}',
+            1,
+            'cm',
+            10
+        );
+        const basketPowerUpgrade = new Upgrade(
+            'basket_power',
+            'Potenciador de Cesta',
+            'Aumenta el multiplicador de cesta. x{level + 2}',
+            2,
+            'cm',
+            10
+        );
+
         this.upgrades.set('start_speed', startSpeedUpgrade);
         this.upgrades.set('start_multiplier', startMultiplierUpgrade);
         this.upgrades.set('fusion_wall', fusionWallUpgrade);
+        this.upgrades.set('basket_count', basketCountUpgrade);
+        this.upgrades.set('basket_power', basketPowerUpgrade);
     }
 
     // Obtener mejora por ID
@@ -295,6 +315,25 @@ class UpgradeManager {
             case 'fusion_wall':
                 // Implementar muro de fusión en el futuro
                 break;
+            case 'basket_count':
+                // Asegurar inventario mínimo = base 1 + nivel permanente
+                if (typeof game !== 'undefined' && game.stats) {
+                    const minInv = 1 + level;
+                    if ((game.stats.basketInventory || 0) < minInv) {
+                        // Elevar a mínimo; no decrementar si ya tiene más por juego actual
+                        game.stats.basketInventory = minInv;
+                    }
+                }
+                break;
+            case 'basket_power':
+                if (typeof game !== 'undefined' && game.stats) {
+                    // Base 2 + nivel actual (x3, x4, ...)
+                    const minMult = 2 + level;
+                    if ((game.stats.basketMultiplier || 0) < minMult) {
+                        game.stats.basketMultiplier = minMult;
+                    }
+                }
+                break;
         }
     }
 
@@ -318,8 +357,8 @@ class UpgradeManager {
         
         const multiplierLevel = multiplierUpgrade ? multiplierUpgrade.currentLevel : 0;
         const startMultiplierLevel = startMultiplierUpgrade ? startMultiplierUpgrade.currentLevel : 0;
-        
-        return Math.max(1, multiplierLevel + startMultiplierLevel);
+        // PC base por fruta = 1 + niveles acumulados
+        return 1 + multiplierLevel + startMultiplierLevel;
     }
 
     // Obtener tamaño actual de la cuadrícula
@@ -422,6 +461,18 @@ class UpgradeUI {
         this.updateWallUpgrades(stats);
         this.updatePrestigeUpgrades(stats);
         this.updatePrestigeVisibility(stats);
+
+        // Si existe la carta de prestigio, actualizar su estado de compra
+        if (this._prestigeBtn && typeof this._prestigeCost === 'number') {
+            const canAfford = stats.growthPoints >= this._prestigeCost;
+            if (canAfford) {
+                this._prestigeBtn.classList.add('affordable');
+                this._prestigeBtn.removeAttribute('disabled');
+            } else {
+                this._prestigeBtn.classList.remove('affordable');
+                this._prestigeBtn.setAttribute('disabled', '');
+            }
+        }
     }
 
     // Actualizar mejoras básicas
@@ -432,8 +483,65 @@ class UpgradeUI {
 
     // Actualizar mejoras de expansión
     updateExpansionUpgrades(stats) {
-        const upgrades = ['expansion', 'cultivo', 'tile_pc', 'tile_speed'];
-        this.updateUpgradeContainer(this.containers.expansion, upgrades, stats);
+        const all = ['expansion', 'cultivo', 'tile_pc', 'tile_speed'];
+        const gridSizeNow = GAME_CONFIG.INITIAL_GRID_SIZE + (this.upgradeManager?.getUpgrade?.('expansion')?.currentLevel || 0);
+        const cap = (typeof stats.getHasPrestiged === 'function' && stats.getHasPrestiged()) ? 15 : 10;
+
+        // Cuando llegamos al cap (10x10 antes de prestigio, 15x15 después), reemplazamos la carta de expansión por Prestigio
+        if (gridSizeNow >= cap) {
+            const upgrades = all.filter(u => u !== 'expansion');
+            // Renderizar el resto normalmente
+            this.updateUpgradeContainer(this.containers.expansion, upgrades, stats);
+            // Inyectar el item de Prestigio al inicio
+            this.renderPrestigeShopItem(stats);
+        } else {
+            // Antes de 10x10, mostrar la expansión normal
+            this.updateUpgradeContainer(this.containers.expansion, all, stats);
+        }
+    }
+
+    // Renderizar un item de tienda especial para Prestigio dentro de la sección de Expansión
+    renderPrestigeShopItem(stats) {
+        if (!this.containers?.expansion) return;
+        const container = this.containers.expansion;
+
+        const cost = (GAME_CONFIG.ECONOMY && GAME_CONFIG.ECONOMY.PRESTIGE_PC_THRESHOLD) ? GAME_CONFIG.ECONOMY.PRESTIGE_PC_THRESHOLD : 10000;
+        const canAfford = stats.growthPoints >= cost;
+
+        // Eliminar una carta previa si ya existe para evitar duplicados
+        const existing = container.querySelector('.upgrade-item.prestige-shop');
+        if (existing) existing.remove();
+
+        const upgradeDiv = document.createElement('div');
+        upgradeDiv.className = 'upgrade-item prestige-shop';
+        upgradeDiv.innerHTML = `
+            <div class="upgrade-header">
+                <span class="upgrade-name">✨ Prestigio</span>
+                <span class="upgrade-level">10x10</span>
+            </div>
+            <div class="upgrade-description">
+                Reinicia la partida y obtén +1 Célula Mutante (CM). Disponible al alcanzar tablero 10x10.
+            </div>
+            <div class="upgrade-cost">
+                <span class="cost-display">${FormatUtils.formatNumber(cost)} PC</span>
+                <button class="upgrade-btn ${canAfford ? 'affordable' : ''}" ${canAfford ? '' : 'disabled'}>
+                    Prestigiar
+                </button>
+            </div>
+        `;
+
+        // Click en el botón -> delegamos al callback de compra con id 'prestige'
+        const button = upgradeDiv.querySelector('.upgrade-btn');
+        button.addEventListener('click', () => {
+            this.onUpgradePurchase('prestige');
+        });
+
+        // Insertar al principio del contenedor
+        container.prepend(upgradeDiv);
+
+        // Guardar referencia para poder actualizar habilitado/estilo en cada updateUI
+        this._prestigeBtn = button;
+        this._prestigeCost = cost;
     }
 
     // Actualizar mejoras de muros
@@ -444,7 +552,7 @@ class UpgradeUI {
 
     // Actualizar mejoras de prestigio
     updatePrestigeUpgrades(stats) {
-        const upgrades = ['start_speed', 'start_multiplier', 'fusion_wall'];
+        const upgrades = ['start_speed', 'start_multiplier', 'fusion_wall', 'basket_count', 'basket_power'];
         this.updateUpgradeContainer(this.containers.prestige, upgrades, stats);
     }
 
@@ -452,7 +560,11 @@ class UpgradeUI {
     updatePrestigeVisibility(stats) {
         const prestigeSection = document.querySelector('.prestige-section');
         if (prestigeSection) {
-            prestigeSection.style.display = stats.canMutate() || stats.mutantCells > 0 ? 'block' : 'none';
+            // Mostrar si ya prestigió o si ya está en 10x10 para que vea las mejoras permanentes
+            const expansionLevel = this.upgradeManager?.getUpgrade?.('expansion')?.currentLevel || 0;
+            const gridSizeNow = GAME_CONFIG.INITIAL_GRID_SIZE + expansionLevel;
+            const show = (typeof stats.getHasPrestiged === 'function' && stats.getHasPrestiged()) || gridSizeNow >= 10 || (stats.mutantCells > 0);
+            prestigeSection.style.display = show ? 'block' : 'none';
         }
     }
 

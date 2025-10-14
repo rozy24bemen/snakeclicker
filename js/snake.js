@@ -203,8 +203,9 @@ class Fruit {
     }
 
     getRewardBase(multiplier) {
-        // Golden otorga +50 PC planos además del multiplicador normal
-        return (multiplier) + (this.type === 'golden' ? 50 : 0);
+        // Golden otorga bono plano además del multiplicador normal
+        const bonus = (typeof GAME_CONFIG !== 'undefined' && GAME_CONFIG.ECONOMY) ? GAME_CONFIG.ECONOMY.GOLDEN_FRUIT_BONUS_PC : 50;
+        return (multiplier) + (this.type === 'golden' ? bonus : 0);
     }
 
     // Verificar si la fruta está en una posición específica
@@ -263,6 +264,11 @@ class GameStats {
         this.totalDeaths = 0;
         this.gameStartTime = Date.now();
         this.currentRunStartTime = Date.now();
+        // Prestigio
+        this.hasPrestiged = StorageUtils.load('hasPrestiged', false) || false;
+        // Cestas (post-prestigio)
+        this.basketInventory = this.hasPrestiged ? 1 : 0;
+        this.basketMultiplier = this.hasPrestiged ? 2 : 1;
     }
 
     // Ganar puntos de crecimiento
@@ -358,7 +364,10 @@ class GameStats {
             mutantCells: this.mutantCells,
             totalFruitsEaten: this.totalFruitsEaten,
             totalDeaths: this.totalDeaths,
-            gameStartTime: this.gameStartTime
+            gameStartTime: this.gameStartTime,
+            hasPrestiged: this.hasPrestiged,
+            basketInventory: this.basketInventory,
+            basketMultiplier: this.basketMultiplier
         };
         StorageUtils.save('gameStats', data);
     }
@@ -373,9 +382,17 @@ class GameStats {
             this.totalFruitsEaten = data.totalFruitsEaten || 0;
             this.totalDeaths = data.totalDeaths || 0;
             this.gameStartTime = data.gameStartTime || Date.now();
+            this.hasPrestiged = data.hasPrestiged || false;
+            this.basketInventory = data.basketInventory ?? (this.hasPrestiged ? 1 : 0);
+            this.basketMultiplier = data.basketMultiplier ?? (this.hasPrestiged ? 2 : 1);
         }
         this.currentRunStartTime = Date.now();
     }
+
+    setHasPrestiged(v) { this.hasPrestiged = !!v; }
+    getHasPrestiged() { return !!this.hasPrestiged; }
+    addBasket(count=1) { this.basketInventory = Math.max(0, (this.basketInventory||0) + count); }
+    useBasket() { if ((this.basketInventory||0) > 0) { this.basketInventory--; return true; } return false; }
 }
 
 // Exportar si se usa en módulos
