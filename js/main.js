@@ -322,8 +322,28 @@ function setupDeveloperTools() {
 🏆 forcePrestige() - Activar estado de prestigio
 🍎 spawnGolden() - Convertir primera fruta en dorada
 🧪 testPrestige() - Preparar condiciones para prestigio
+🔄 hardReset() - Reset nuclear (limpia TODO sin confirmación)
 ❓ help() - Mostrar esta ayuda
         `);
+    };
+
+    window.hardReset = () => {
+        // Reset nuclear sin confirmación - para debugging
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // Forzar limpieza del estado global
+        if (typeof game !== 'undefined' && game && game.stats) {
+            game.stats.hasPrestiged = false;
+            game.stats.setHasPrestiged(false);
+            game.stats.pureDNA = 0;
+            game.stats.money = 0;
+        }
+        
+        console.log("🚀 HARD RESET ejecutado - recargando página...");
+        setTimeout(() => {
+            window.location.href = window.location.href.split('?')[0] + '?hardreset=' + Date.now();
+        }, 100);
     };
     
     window.toggleGodMode = () => {
@@ -388,8 +408,33 @@ window.addEventListener('unhandledrejection', (e) => {
 // Función para reiniciar el juego completamente
 function restartGame() {
     if (confirm('¿Estás seguro de que quieres reiniciar completamente el juego? Se perderán todos los datos guardados.')) {
+        // Limpiar localStorage completamente
         StorageUtils.clear();
-        location.reload();
+        
+        // Limpiar también sessionStorage por si acaso
+        try {
+            sessionStorage.clear();
+        } catch (e) {
+            console.error('Error limpiando sessionStorage:', e);
+        }
+        
+        // Limpiar variables globales del juego si existen
+        if (typeof game !== 'undefined' && game) {
+            // Forzar reset completo del estado del juego antes de recargar
+            try {
+                if (game.stats) {
+                    game.stats.hasPrestiged = false;
+                    game.stats.setHasPrestiged(false);
+                    game.stats.pureDNA = 0;
+                    game.stats.money = 0;
+                }
+            } catch (e) {
+                console.log('Estado del juego limpiado');
+            }
+        }
+        
+        // Forzar recarga completa sin cache
+        window.location.href = window.location.href.split('?')[0] + '?reset=' + Date.now();
     }
 }
 
