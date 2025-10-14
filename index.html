@@ -12,8 +12,8 @@
             <h1>🐍 Idle Snake</h1>
             <div class="hud">
                 <div class="stat">
-                    <span class="label">Puntos de Crecimiento:</span>
-                    <span class="value" id="pc-counter">0</span>
+                    <span class="label">Dinero:</span>
+                    <span class="value" id="money-counter">$0</span>
                 </div>
                 <div class="stat">
                     <span class="label">Longitud:</span>
@@ -23,11 +23,11 @@
                     <span class="label">Longitud Máxima:</span>
                     <span class="value" id="max-length-counter">3</span>
                 </div>
-                <div class="stat">
+                <div class="stat" style="display:none;">
                     <span class="label">PC Tile Bonus:</span>
                     <span class="value" id="pc-tile-bonus">+0</span>
                 </div>
-                <div class="stat">
+                <div class="stat" style="display:none;">
                     <span class="label">Velocidad:</span>
                     <span class="value" id="speed-mult">x1.0</span>
                 </div>
@@ -45,7 +45,7 @@
                 </div>
                 <div class="game-controls">
                     <button id="edit-mode-btn" class="control-btn" disabled>Modo Edición</button>
-                    <button id="tile-place-btn" class="control-btn" disabled>Baldosas</button>
+                    <button id="tile-place-btn" class="control-btn" disabled style="display:none;">Baldosas</button>
                     <button id="basket-place-btn" class="control-btn" disabled>Cestas</button>
                     <div class="tile-type-controls" id="tile-type-controls" style="display:none;">
                         <label><input type="radio" name="tile-type" id="tile-type-pc" value="PC" checked> PC</label>
@@ -75,10 +75,10 @@
                     </div>
                     
                     <div class="upgrade-category prestige-section" style="display: none;">
-                        <h3>Células Mutantes</h3>
+                        <h3>ADN Puro</h3>
                         <div class="stat">
-                            <span class="label">CM:</span>
-                            <span class="value" id="cm-counter">0</span>
+                            <span class="label">ADN:</span>
+                            <span class="value" id="dna-counter">0</span>
                         </div>
                         <div id="prestige-upgrades"></div>
                     </div>

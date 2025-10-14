@@ -256,10 +256,10 @@ class GameStats {
     }
 
     reset() {
-        this.growthPoints = 0;
+        this.money = 0; // PC → $
         this.currentLength = GAME_CONFIG.INITIAL_SNAKE_LENGTH;
         this.maxLength = GAME_CONFIG.INITIAL_SNAKE_LENGTH;
-        this.mutantCells = 0;
+        this.pureDNA = 0; // CM → ADN Puro
         this.totalFruitsEaten = 0;
         this.totalDeaths = 0;
         this.gameStartTime = Date.now();
@@ -271,15 +271,15 @@ class GameStats {
         this.basketMultiplier = this.hasPrestiged ? 2 : 1;
     }
 
-    // Ganar puntos de crecimiento
-    addGrowthPoints(amount = 1) {
-        this.growthPoints += amount;
+    // Ganar dinero ($)
+    addMoney(amount = 1) {
+        this.money += amount;
     }
 
-    // Gastar puntos de crecimiento
-    spendGrowthPoints(amount) {
-        if (this.growthPoints >= amount) {
-            this.growthPoints -= amount;
+    // Gastar dinero ($)
+    spendMoney(amount) {
+        if (this.money >= amount) {
+            this.money -= amount;
             return true;
         }
         return false;
@@ -296,7 +296,7 @@ class GameStats {
     // Comer una fruta
     eatFruit(multiplier = 1) {
         this.totalFruitsEaten++;
-        this.addGrowthPoints(multiplier);
+        this.addMoney(multiplier);
     }
 
     // Muerte de la serpiente
@@ -314,8 +314,8 @@ class GameStats {
     // Realizar mutación
     performMutation() {
         if (this.canMutate()) {
-            this.mutantCells++;
-            this.growthPoints = 0;
+            this.pureDNA++;
+            this.money = 0;
             this.maxLength = GAME_CONFIG.INITIAL_SNAKE_LENGTH;
             this.currentLength = GAME_CONFIG.INITIAL_SNAKE_LENGTH;
             return true;
@@ -323,10 +323,15 @@ class GameStats {
         return false;
     }
 
-    // Gastar células mutantes
-    spendMutantCells(amount) {
-        if (this.mutantCells >= amount) {
-            this.mutantCells -= amount;
+    // Añadir ADN Puro
+    addPureDNA(amount) {
+        this.pureDNA += amount;
+    }
+
+    // Gastar ADN Puro
+    spendPureDNA(amount) {
+        if (this.pureDNA >= amount) {
+            this.pureDNA -= amount;
             return true;
         }
         return false;
@@ -345,10 +350,10 @@ class GameStats {
     // Obtener estadísticas para mostrar
     getDisplayStats() {
         return {
-            growthPoints: this.growthPoints,
+            money: this.money,
             currentLength: this.currentLength,
             maxLength: this.maxLength,
-            mutantCells: this.mutantCells,
+            pureDNA: this.pureDNA,
             totalFruitsEaten: this.totalFruitsEaten,
             totalDeaths: this.totalDeaths,
             totalPlayTime: this.getTotalPlayTime(),
@@ -359,9 +364,9 @@ class GameStats {
     // Guardar estadísticas
     save() {
         const data = {
-            growthPoints: this.growthPoints,
+            money: this.money,
             maxLength: this.maxLength,
-            mutantCells: this.mutantCells,
+            pureDNA: this.pureDNA,
             totalFruitsEaten: this.totalFruitsEaten,
             totalDeaths: this.totalDeaths,
             gameStartTime: this.gameStartTime,
@@ -376,9 +381,9 @@ class GameStats {
     load() {
         const data = StorageUtils.load('gameStats');
         if (data) {
-            this.growthPoints = data.growthPoints || 0;
+            this.money = data.money || data.growthPoints || 0; // Mantener compatibilidad con saves antiguos
             this.maxLength = data.maxLength || GAME_CONFIG.INITIAL_SNAKE_LENGTH;
-            this.mutantCells = data.mutantCells || 0;
+            this.pureDNA = data.pureDNA || data.mutantCells || 0; // Mantener compatibilidad con saves antiguos
             this.totalFruitsEaten = data.totalFruitsEaten || 0;
             this.totalDeaths = data.totalDeaths || 0;
             this.gameStartTime = data.gameStartTime || Date.now();

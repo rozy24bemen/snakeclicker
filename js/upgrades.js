@@ -1,4 +1,4 @@
-// upgrades.js - Sistema de mejoras con PC y Células Mutantes
+// upgrades.js - Sistema de mejoras con $ y ADN Puro
 
 class Upgrade {
     constructor(id, name, description, baseCost, costType, maxLevel = Infinity) {
@@ -6,7 +6,7 @@ class Upgrade {
         this.name = name;
         this.description = description;
         this.baseCost = baseCost;
-        this.costType = costType; // 'pc' o 'cm'
+        this.costType = costType; // 'money' o 'pureDNA'
         this.maxLevel = maxLevel;
         this.currentLevel = 0;
         this.costMultiplier = 1.5;
@@ -52,17 +52,17 @@ class Upgrade {
         return this.currentLevel >= this.maxLevel;
     }
 
-    // Reset para nueva partida (mantener para PC upgrades)
+    // Reset para nueva partida (mantener para $ upgrades)
     resetForNewGame() {
-        // Las mejoras de PC se mantienen
+        // Las mejoras de $ se mantienen
     }
 
     // Reset para mutación
     resetForMutation() {
-        if (this.costType === 'pc') {
+        if (this.costType === 'money') {
             this.currentLevel = 0;
         }
-        // Las mejoras de CM se mantienen
+        // Las mejoras de ADN Puro se mantienen
     }
 }
 
@@ -87,16 +87,16 @@ class UpgradeManager {
             'Velocidad de Movimiento',
             'Aumenta la velocidad de la serpiente. Nivel {level}',
             10,
-            'pc',
+            'money',
             20
         );
 
         const multiplierUpgrade = new Upgrade(
             'multiplier',
-            'Multiplicador de PC',
-            'Cada fruta otorga más PC. x{level}',
+            'Multiplicador de $',
+            'Cada fruta otorga más $. x{level}',
             25,
-            'pc',
+            'money',
             10
         );
 
@@ -105,7 +105,7 @@ class UpgradeManager {
             'Cultivo Expandido',
             'Permite una fruta adicional simultánea (+1 por nivel).',
             150,
-            'pc',
+            'money',
             5
         );
 
@@ -121,7 +121,7 @@ class UpgradeManager {
             'Cápsula de Expansión',
             'Aumenta el tamaño de la cuadrícula (+1 por nivel).',
             100, // costo base (escala con tamaño actual)
-            'pc',
+            'money',
             10 // nivel técnico máximo para llegar a 15x15 si se habilita tras prestigio
         );
 
@@ -130,7 +130,7 @@ class UpgradeManager {
             'Baldosas PC+',
             'Añade 1 baldosa PC_MULT colocable por nivel (total {level}).',
             250,
-            'pc',
+            'money',
             15
         );
 
@@ -139,7 +139,7 @@ class UpgradeManager {
             'Baldosas Velocidad',
             'Añade 1 baldosa SPEED colocable por nivel (total {level}).',
             300,
-            'pc',
+            'money',
             15
         );
 
@@ -155,7 +155,7 @@ class UpgradeManager {
             'Portal Wall',
             'Añade un par de portales al inventario. Cantidad: {level}',
             200,
-            'pc',
+            'money',
             10
         );
 
@@ -164,7 +164,7 @@ class UpgradeManager {
             'Muro de Repulsión',
             'Fuerza a la fruta a reaparecer lejos. Cantidad: {level}',
             300,
-            'pc',
+            'money',
             5
         );
 
@@ -173,7 +173,7 @@ class UpgradeManager {
             'Muro de Impulso',
             'Otorga supervelocidad temporal. Cantidad: {level}',
             400,
-            'pc',
+            'money',
             5
         );
 
@@ -189,7 +189,7 @@ class UpgradeManager {
             'Velocidad Inicial Permanente',
             'Velocidad base permanente mejorada. Nivel {level}',
             1,
-            'cm',
+            'pureDNA',
             5
         );
 
@@ -198,7 +198,7 @@ class UpgradeManager {
             'Multiplicador Inicial Permanente',
             'Multiplicador base permanente. x{level}',
             2,
-            'cm',
+            'pureDNA',
             5
         );
 
@@ -207,7 +207,7 @@ class UpgradeManager {
             'Muro de Fusión',
             'Muro especial que combina efectos. Cantidad: {level}',
             3,
-            'cm',
+            'pureDNA',
             3
         );
 
@@ -217,7 +217,7 @@ class UpgradeManager {
             'Cestas Adicionales',
             'Aumenta la cantidad de cestas disponibles. Cantidad total {level}',
             1,
-            'cm',
+            'pureDNA',
             10
         );
         const basketPowerUpgrade = new Upgrade(
@@ -225,7 +225,7 @@ class UpgradeManager {
             'Potenciador de Cesta',
             'Aumenta el multiplicador de cesta. x{level + 2}',
             2,
-            'cm',
+            'pureDNA',
             10
         );
 
@@ -260,10 +260,10 @@ class UpgradeManager {
         let hasEnoughCurrency = false;
 
         // Verificar moneda disponible
-        if (upgrade.costType === 'pc') {
-            hasEnoughCurrency = stats.growthPoints >= cost;
-        } else if (upgrade.costType === 'cm') {
-            hasEnoughCurrency = stats.mutantCells >= cost;
+        if (upgrade.costType === 'money') {
+            hasEnoughCurrency = stats.money >= cost;
+        } else if (upgrade.costType === 'pureDNA') {
+            hasEnoughCurrency = stats.pureDNA >= cost;
         }
 
         if (!hasEnoughCurrency) {
@@ -278,10 +278,10 @@ class UpgradeManager {
         }
 
         // Deducir costo
-        if (upgrade.costType === 'pc') {
-            stats.spendGrowthPoints(cost);
-        } else if (upgrade.costType === 'cm') {
-            stats.spendMutantCells(cost);
+        if (upgrade.costType === 'money') {
+            stats.spendMoney(cost);
+        } else if (upgrade.costType === 'pureDNA') {
+            stats.spendPureDNA(cost);
         }
 
         // Aplicar efectos de la mejora
@@ -350,14 +350,14 @@ class UpgradeManager {
                        GAME_CONFIG.INITIAL_SPEED / totalSpeedMultiplier);
     }
 
-    // Obtener multiplicador actual de PC
-    getCurrentPCMultiplier() {
+    // Obtener multiplicador actual de $
+    getCurrentMoneyMultiplier() {
         const multiplierUpgrade = this.getUpgrade('multiplier');
         const startMultiplierUpgrade = this.getUpgrade('start_multiplier');
         
         const multiplierLevel = multiplierUpgrade ? multiplierUpgrade.currentLevel : 0;
         const startMultiplierLevel = startMultiplierUpgrade ? startMultiplierUpgrade.currentLevel : 0;
-        // PC base por fruta = 1 + niveles acumulados
+        // $ base por fruta = 1 + niveles acumulados
         return 1 + multiplierLevel + startMultiplierLevel;
     }
 
@@ -381,7 +381,7 @@ class UpgradeManager {
             case 'boost_wall':
                 return this.getUpgrade('portal_wall').currentLevel >= 1;
             case 'fusion_wall':
-                return stats.mutantCells >= 1; // Disponible solo después de la primera mutación
+                return stats.pureDNA >= 1; // Disponible solo después de la primera mutación
         }
 
         return true;
@@ -396,7 +396,7 @@ class UpgradeManager {
 
     // Reset para nueva partida
     resetForNewGame() {
-        // Las mejoras de PC se mantienen
+        // Las mejoras de $ se mantienen
         this.upgrades.forEach(upgrade => upgrade.resetForNewGame());
     }
 
@@ -464,7 +464,7 @@ class UpgradeUI {
 
         // Si existe la carta de prestigio, actualizar su estado de compra
         if (this._prestigeBtn && typeof this._prestigeCost === 'number') {
-            const canAfford = stats.growthPoints >= this._prestigeCost;
+            const canAfford = stats.money >= this._prestigeCost;
             if (canAfford) {
                 this._prestigeBtn.classList.add('affordable');
                 this._prestigeBtn.removeAttribute('disabled');
@@ -483,7 +483,7 @@ class UpgradeUI {
 
     // Actualizar mejoras de expansión
     updateExpansionUpgrades(stats) {
-        const all = ['expansion', 'cultivo', 'tile_pc', 'tile_speed'];
+        const all = ['expansion', 'cultivo']; // Ocultamos 'tile_pc', 'tile_speed' pero mantenemos la lógica
         const gridSizeNow = GAME_CONFIG.INITIAL_GRID_SIZE + (this.upgradeManager?.getUpgrade?.('expansion')?.currentLevel || 0);
         const cap = (typeof stats.getHasPrestiged === 'function' && stats.getHasPrestiged()) ? 15 : 10;
 
@@ -506,7 +506,7 @@ class UpgradeUI {
         const container = this.containers.expansion;
 
         const cost = (GAME_CONFIG.ECONOMY && GAME_CONFIG.ECONOMY.PRESTIGE_PC_THRESHOLD) ? GAME_CONFIG.ECONOMY.PRESTIGE_PC_THRESHOLD : 10000;
-        const canAfford = stats.growthPoints >= cost;
+        const canAfford = stats.money >= cost;
 
         // Eliminar una carta previa si ya existe para evitar duplicados
         const existing = container.querySelector('.upgrade-item.prestige-shop');
@@ -520,10 +520,10 @@ class UpgradeUI {
                 <span class="upgrade-level">10x10</span>
             </div>
             <div class="upgrade-description">
-                Reinicia la partida y obtén +1 Célula Mutante (CM). Disponible al alcanzar tablero 10x10.
+                Reinicia la partida y obtén +1 ADN Puro. Disponible al alcanzar tablero 10x10.
             </div>
             <div class="upgrade-cost">
-                <span class="cost-display">${FormatUtils.formatNumber(cost)} PC</span>
+                <span class="cost-display">${FormatUtils.formatNumber(cost)} $</span>
                 <button class="upgrade-btn ${canAfford ? 'affordable' : ''}" ${canAfford ? '' : 'disabled'}>
                     Prestigiar
                 </button>
@@ -546,7 +546,7 @@ class UpgradeUI {
 
     // Actualizar mejoras de muros
     updateWallUpgrades(stats) {
-        const upgrades = ['portal_wall', 'repulsion_wall', 'boost_wall'];
+        const upgrades = []; // Ocultamos portal_wall, repulsion_wall, boost_wall pero mantenemos la lógica
         this.updateUpgradeContainer(this.containers.walls, upgrades, stats);
     }
 
@@ -563,7 +563,7 @@ class UpgradeUI {
             // Mostrar si ya prestigió o si ya está en 10x10 para que vea las mejoras permanentes
             const expansionLevel = this.upgradeManager?.getUpgrade?.('expansion')?.currentLevel || 0;
             const gridSizeNow = GAME_CONFIG.INITIAL_GRID_SIZE + expansionLevel;
-            const show = (typeof stats.getHasPrestiged === 'function' && stats.getHasPrestiged()) || gridSizeNow >= 10 || (stats.mutantCells > 0);
+            const show = (typeof stats.getHasPrestiged === 'function' && stats.getHasPrestiged()) || gridSizeNow >= 10 || (stats.pureDNA > 0);
             prestigeSection.style.display = show ? 'block' : 'none';
         }
     }
@@ -592,7 +592,7 @@ class UpgradeUI {
         
         const cost = upgrade.getCurrentCost();
         const canAfford = upgrade.canPurchase(
-            upgrade.costType === 'pc' ? stats.growthPoints : stats.mutantCells
+            upgrade.costType === 'money' ? stats.money : stats.pureDNA
         );
         
         upgradeDiv.innerHTML = `
@@ -603,7 +603,7 @@ class UpgradeUI {
             <div class="upgrade-description">${upgrade.getDescription()}</div>
             <div class="upgrade-cost">
                 <span class="cost-display">
-                    ${upgrade.isMaxLevel() ? 'MAX' : `${FormatUtils.formatNumber(cost)} ${upgrade.costType.toUpperCase()}`}
+                    ${upgrade.isMaxLevel() ? 'MAX' : `${FormatUtils.formatNumber(cost)} ${upgrade.costType === 'money' ? '$' : 'ADN'}`}
                 </span>
                 <button class="upgrade-btn ${canAfford ? 'affordable' : ''}" 
                         ${canAfford && !upgrade.isMaxLevel() ? '' : 'disabled'}>

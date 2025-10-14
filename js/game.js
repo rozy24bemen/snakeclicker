@@ -15,10 +15,10 @@ class IdleSnakeGame {
     this.tileInvText = document.getElementById('tile-inv-text');
         
     // Elementos de estadísticas
-        this.pcCounter = document.getElementById('pc-counter');
+        this.moneyCounter = document.getElementById('money-counter');
         this.lengthCounter = document.getElementById('length-counter');
         this.maxLengthCounter = document.getElementById('max-length-counter');
-        this.cmCounter = document.getElementById('cm-counter');
+        this.dnaCounter = document.getElementById('dna-counter');
     this.pcTileBonusEl = document.getElementById('pc-tile-bonus');
     this.speedMultEl = document.getElementById('speed-mult');
     // Mini-HUD
@@ -351,7 +351,7 @@ class IdleSnakeGame {
     handleFruitEaten(fruit) {
         this.snake.grow();
         // Base: multiplicador de upgrades + bonus por baldosa en la celda de la fruta
-        const baseMult = this.upgradeManager.getCurrentPCMultiplier();
+        const baseMult = this.upgradeManager.getCurrentMoneyMultiplier();
         const pos = fruit.position;
         let tileBonus = 0;
         const effect = this.tileEffects ? this.tileEffects.getEffect(pos.x, pos.y) : null;
@@ -368,7 +368,7 @@ class IdleSnakeGame {
         }
         this.stats.eatFruit(reward);
         if (fruit.type === 'golden') Logger.log('Golden Apple consumida');
-        Logger.log(`Fruta comida (${fruit.type}). PC ganados: ${reward}`);
+        Logger.log(`Fruta comida (${fruit.type}). $ ganados: ${reward}`);
     }
 
     // Generar nueva fruta
@@ -676,10 +676,10 @@ class IdleSnakeGame {
     updateUI() {
         const stats = this.stats.getDisplayStats();
         
-        this.pcCounter.textContent = FormatUtils.formatNumber(stats.growthPoints);
+        this.moneyCounter.textContent = `$${FormatUtils.formatNumber(stats.money)}`;
         this.lengthCounter.textContent = FormatUtils.formatNumber(stats.currentLength);
         this.maxLengthCounter.textContent = FormatUtils.formatNumber(stats.maxLength);
-        this.cmCounter.textContent = FormatUtils.formatNumber(stats.mutantCells);
+        this.dnaCounter.textContent = FormatUtils.formatNumber(stats.pureDNA);
 
         // Mini-HUD: efectos activos en la celda de la cabeza
         let tileBonus = 0;
@@ -708,9 +708,9 @@ class IdleSnakeGame {
         this.upgradeUI.updateUI(this.stats);
         // Gestionar visibilidad/estado de Prestigio (para la carta en tienda)
         const prestigeSection = document.querySelector('.prestige-section');
-        const pcThreshold = (GAME_CONFIG.ECONOMY && GAME_CONFIG.ECONOMY.PRESTIGE_PC_THRESHOLD) ? GAME_CONFIG.ECONOMY.PRESTIGE_PC_THRESHOLD : 10000;
+        const moneyThreshold = (GAME_CONFIG.ECONOMY && GAME_CONFIG.ECONOMY.PRESTIGE_MONEY_THRESHOLD) ? GAME_CONFIG.ECONOMY.PRESTIGE_MONEY_THRESHOLD : 10000;
         const gridCap = this.stats.getHasPrestiged() ? 15 : 10;
-        this.prestigeReady = (this.gridSize >= gridCap) && (this.stats.growthPoints >= pcThreshold);
+        this.prestigeReady = (this.gridSize >= gridCap) && (this.stats.money >= moneyThreshold);
         if (prestigeSection) {
             const showPrestige = this.stats.getHasPrestiged() || (this.gridSize >= gridCap);
             prestigeSection.style.display = showPrestige ? 'block' : 'none';
@@ -760,7 +760,7 @@ class IdleSnakeGame {
     performPrestige() {
         if (!this.prestigeReady) return false;
         // Recompensa
-        this.stats.mutantCells += 1;
+        this.stats.pureDNA += 1;
         this.stats.setHasPrestiged(true);
         // Reset de mejoras e inventarios del run
         this.upgradeManager.resetForMutation();
@@ -778,8 +778,8 @@ class IdleSnakeGame {
         this.gridSize = GAME_CONFIG.INITIAL_GRID_SIZE;
         this.updateCanvasSize();
         this.resetGame(this.gridSize, { preserveStats: false });
-        // PC y longitudes base
-        this.stats.growthPoints = 0;
+        // $ y longitudes base
+        this.stats.money = 0;
         this.stats.currentLength = GAME_CONFIG.INITIAL_SNAKE_LENGTH;
         this.stats.maxLength = GAME_CONFIG.INITIAL_SNAKE_LENGTH;
         // Guardar y refrescar
@@ -815,11 +815,11 @@ class IdleSnakeGame {
         // Manejo especial: 'prestige' como item de tienda
         if (upgradeId === 'prestige') {
             const pcThreshold = (GAME_CONFIG.ECONOMY && GAME_CONFIG.ECONOMY.PRESTIGE_PC_THRESHOLD) ? GAME_CONFIG.ECONOMY.PRESTIGE_PC_THRESHOLD : 10000;
-            const canAfford = this.stats.growthPoints >= pcThreshold;
+            const canAfford = this.stats.money >= pcThreshold;
             const cap = this.stats.getHasPrestiged() ? 15 : 10;
             const atMaxBoard = this.gridSize >= cap;
             if (atMaxBoard && canAfford) {
-                // Gastar el coste de prestigio (PC)
+                // Gastar el coste de prestigio ($)
                 this.stats.spendGrowthPoints(pcThreshold);
                 this.performPrestige();
             } else {
@@ -852,6 +852,11 @@ class IdleSnakeGame {
                 const cap = this.stats.getHasPrestiged() ? 15 : 10;
                 if (targetSize <= cap) {
                     this.resetGame(targetSize, { preserveStats: true });
+                    // Después del primer prestigio, cada expansión otorga 1 ADN Puro
+                    if (this.stats.getHasPrestiged()) {
+                        this.stats.addPureDNA(1);
+                        Logger.log('¡Ganaste 1 ADN Puro por expandir el tablero!');
+                    }
                 }
             } else if (upgradeId === 'cultivo') {
                 this.ensureFruitPopulation();

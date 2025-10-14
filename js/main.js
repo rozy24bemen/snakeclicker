@@ -189,7 +189,7 @@ function createMutationButton() {
     const button = document.createElement('button');
     button.id = 'mutation-btn';
     button.className = 'upgrade-btn affordable';
-    button.textContent = '🧬 MUTAR (Reiniciar con CM)';
+    button.textContent = '🧬 MUTAR (Reiniciar con ADN Puro)';
     button.style.width = '100%';
     button.style.marginTop = '15px';
     button.style.padding = '15px';
@@ -206,7 +206,7 @@ function createMutationButton() {
 function showMutationConfirmation() {
     const message = `¿Estás seguro de que quieres MUTAR?\n\n` +
                    `Esto reiniciará:\n` +
-                   `- Todas las mejoras de PC\n` +
+                   `- Todas las mejoras de $\n` +
                    `- Todos los muros colocados\n` +
                    `- El progreso actual\n\n` +
                    `Recibirás 1 Célula Mutante para mejoras permanentes.`;
@@ -222,7 +222,7 @@ function showMutationConfirmation() {
 
 // Mostrar éxito de mutación
 function showMutationSuccess() {
-    alert('¡Mutación exitosa! Has recibido 1 Célula Mutante.\n\nPuedes usar las CM para comprar mejoras permanentes.');
+    alert('¡Mutación exitosa! Has recibido 1 ADN Puro.\n\nPuedes usar el ADN Puro para comprar mejoras permanentes.');
 }
 
 // Configurar atajos de teclado
@@ -270,7 +270,7 @@ function setupDeveloperTools() {
     };
     
     window.giveCM = (amount) => {
-        game.stats.mutantCells += amount;
+        game.stats.pureDNA += amount;
         game.updateUI();
     };
     
