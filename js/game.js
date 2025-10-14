@@ -822,7 +822,7 @@ class IdleSnakeGame {
             const atMaxBoard = this.gridSize >= cap;
             if (atMaxBoard && canAfford) {
                 // Gastar el coste de prestigio ($)
-                this.stats.spendGrowthPoints(pcThreshold);
+                this.stats.spendMoney(pcThreshold);
                 this.performPrestige();
             } else {
                 Logger.warn('No cumples requisitos para prestigiar.');
