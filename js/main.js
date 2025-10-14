@@ -305,6 +305,14 @@ function setupDeveloperTools() {
         }
     };
 
+    window.testPrestige = () => {
+        givePC(50000); // Dar suficiente dinero
+        for(let i = 0; i < 5; i++) { // Comprar 5 expansiones para llegar a 10x10
+            game.handleUpgradePurchase('expansion');
+        }
+        console.log(`Grid size: ${game.gridSize}, Money: ${game.stats.money}, Can prestige: ${game.prestigeReady}`);
+    };
+
     window.help = () => {
         console.log(`
 🎮 COMANDOS DE DEBUG DISPONIBLES:
@@ -313,6 +321,7 @@ function setupDeveloperTools() {
 📏 forceMaxLength() - Forzar longitud máxima a 100
 🏆 forcePrestige() - Activar estado de prestigio
 🍎 spawnGolden() - Convertir primera fruta en dorada
+🧪 testPrestige() - Preparar condiciones para prestigio
 ❓ help() - Mostrar esta ayuda
         `);
     };

@@ -25,7 +25,7 @@ const GAME_CONFIG = {
         SPEED: '#FF9800'
     },
     ECONOMY: {
-        PRESTIGE_PC_THRESHOLD: 10000,
+        PRESTIGE_MONEY_THRESHOLD: 10000,   // Threshold en $ para prestigio
         GOLDEN_FRUIT_CHANCE_BASE: 0.01,    // 1% tras prestigio
         GOLDEN_FRUIT_MULTIPLIER_BASE: 10   // x10 tras prestigio
     }

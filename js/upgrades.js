@@ -497,9 +497,9 @@ class UpgradeUI {
     }
 
     // Actualizar toda la UI de mejoras
-    updateUI(stats) {
+    updateUI(stats, currentGridSize = null) {
         this.updateBasicUpgrades(stats);
-        this.updateExpansionUpgrades(stats);
+        this.updateExpansionUpgrades(stats, currentGridSize);
         this.updateWallUpgrades(stats);
         this.updatePrestigeUpgrades(stats);
         this.updatePrestigeVisibility(stats);
@@ -524,9 +524,10 @@ class UpgradeUI {
     }
 
     // Actualizar mejoras de expansión
-    updateExpansionUpgrades(stats) {
+    updateExpansionUpgrades(stats, currentGridSize = null) {
         const all = ['expansion', 'cultivo']; // Ocultamos 'tile_pc', 'tile_speed' pero mantenemos la lógica
-        const gridSizeNow = GAME_CONFIG.INITIAL_GRID_SIZE + (this.upgradeManager?.getUpgrade?.('expansion')?.currentLevel || 0);
+        // Usar el tamaño real del grid si se proporciona, sino calcular basado en upgrade level
+        const gridSizeNow = currentGridSize || (GAME_CONFIG.INITIAL_GRID_SIZE + (this.upgradeManager?.getUpgrade?.('expansion')?.currentLevel || 0));
         const cap = (typeof stats.getHasPrestiged === 'function' && stats.getHasPrestiged()) ? 15 : 10;
 
         // Cuando llegamos al cap (10x10 antes de prestigio, 15x15 después), reemplazamos la carta de expansión por Prestigio
@@ -547,7 +548,7 @@ class UpgradeUI {
         if (!this.containers?.expansion) return;
         const container = this.containers.expansion;
 
-        const cost = (GAME_CONFIG.ECONOMY && GAME_CONFIG.ECONOMY.PRESTIGE_PC_THRESHOLD) ? GAME_CONFIG.ECONOMY.PRESTIGE_PC_THRESHOLD : 10000;
+        const cost = (GAME_CONFIG.ECONOMY && GAME_CONFIG.ECONOMY.PRESTIGE_MONEY_THRESHOLD) ? GAME_CONFIG.ECONOMY.PRESTIGE_MONEY_THRESHOLD : 10000;
         const canAfford = stats.money >= cost;
 
         // Eliminar una carta previa si ya existe para evitar duplicados

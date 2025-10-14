@@ -704,8 +704,8 @@ class IdleSnakeGame {
     if (this.miniHudPc) this.miniHudPc.textContent = `+${tileBonus} $`;
     if (this.miniHudSpd) this.miniHudSpd.textContent = `x${speedMultTile.toFixed(1)} SPD`;
         
-        // Actualizar mejoras
-        this.upgradeUI.updateUI(this.stats);
+        // Actualizar mejoras (pasar tamaño actual del grid)
+        this.upgradeUI.updateUI(this.stats, this.gridSize);
         // Gestionar visibilidad/estado de Prestigio (para la carta en tienda)
         const prestigeSection = document.querySelector('.prestige-section');
         const moneyThreshold = (GAME_CONFIG.ECONOMY && GAME_CONFIG.ECONOMY.PRESTIGE_MONEY_THRESHOLD) ? GAME_CONFIG.ECONOMY.PRESTIGE_MONEY_THRESHOLD : 10000;
@@ -773,7 +773,8 @@ class IdleSnakeGame {
         const basketCountLevel = this.upgradeManager?.getUpgrade?.('basket_count')?.currentLevel || 0;
         const basketPowerLevel = this.upgradeManager?.getUpgrade?.('basket_power')?.currentLevel || 0;
         this.stats.basketInventory = 1 + basketCountLevel; // base 1 + niveles permanentes
-        this.stats.basketMultiplier = (basketPowerLevel * 3) + 5; // Nueva fórmula: x5, x8, x11...
+        // Multiplicador base: nivel 0 = x5, nivel 1 = x8, etc.
+        this.stats.basketMultiplier = Math.max(5, (basketPowerLevel * 3) + 5);
         // Reiniciar juego a 5x5
         const oldSize = this.gridSize; // Guardar el tamaño anterior
         this.gridSize = GAME_CONFIG.INITIAL_GRID_SIZE;
@@ -815,7 +816,7 @@ class IdleSnakeGame {
     purchaseUpgrade(upgradeId) {
         // Manejo especial: 'prestige' como item de tienda
         if (upgradeId === 'prestige') {
-            const pcThreshold = (GAME_CONFIG.ECONOMY && GAME_CONFIG.ECONOMY.PRESTIGE_PC_THRESHOLD) ? GAME_CONFIG.ECONOMY.PRESTIGE_PC_THRESHOLD : 10000;
+            const pcThreshold = (GAME_CONFIG.ECONOMY && GAME_CONFIG.ECONOMY.PRESTIGE_MONEY_THRESHOLD) ? GAME_CONFIG.ECONOMY.PRESTIGE_MONEY_THRESHOLD : 10000;
             const canAfford = this.stats.money >= pcThreshold;
             const cap = this.stats.getHasPrestiged() ? 15 : 10;
             const atMaxBoard = this.gridSize >= cap;
