@@ -370,6 +370,32 @@ class WallManager {
         });
     }
 
+    // Redimensionar y recentrar muros cuando se expande el tablero
+    resize(oldSize, newSize) {
+        // Calcular desplazamiento para mantener elementos centrados
+        const oldCenter = Math.floor(oldSize / 2);
+        const newCenter = Math.floor(newSize / 2);
+        const offsetX = newCenter - oldCenter;
+        const offsetY = newCenter - oldCenter;
+        
+        // Reposicionar todos los muros existentes
+        this.walls.forEach(wall => {
+            const newPositions = [];
+            wall.positions.forEach(pos => {
+                const newX = pos.x + offsetX;
+                const newY = pos.y + offsetY;
+                // Solo mantener posiciones que estén dentro del nuevo tablero
+                if (newX >= 0 && newX < newSize && newY >= 0 && newY < newSize) {
+                    newPositions.push({ x: newX, y: newY });
+                }
+            });
+            wall.positions = newPositions;
+        });
+        
+        // Remover muros que perdieron todas sus posiciones
+        this.walls = this.walls.filter(wall => wall.positions.length > 0);
+    }
+
     // Reset para nueva partida (mantener inventario)
     resetForNewGame() {
         // No limpiar muros ni inventario en muerte normal

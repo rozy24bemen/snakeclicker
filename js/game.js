@@ -773,8 +773,9 @@ class IdleSnakeGame {
         const basketCountLevel = this.upgradeManager?.getUpgrade?.('basket_count')?.currentLevel || 0;
         const basketPowerLevel = this.upgradeManager?.getUpgrade?.('basket_power')?.currentLevel || 0;
         this.stats.basketInventory = 1 + basketCountLevel; // base 1 + niveles permanentes
-        this.stats.basketMultiplier = 2 + basketPowerLevel; // base x2 + niveles permanentes
+        this.stats.basketMultiplier = (basketPowerLevel * 3) + 5; // Nueva fórmula: x5, x8, x11...
         // Reiniciar juego a 5x5
+        const oldSize = this.gridSize; // Guardar el tamaño anterior
         this.gridSize = GAME_CONFIG.INITIAL_GRID_SIZE;
         this.updateCanvasSize();
         this.resetGame(this.gridSize, { preserveStats: false });
@@ -1024,6 +1025,7 @@ class IdleSnakeGame {
      */
     resetGame(newSize, options = {}) {
         const { preserveStats = false } = options;
+        const oldSize = this.gridSize;
         if (typeof newSize === 'number' && newSize > 0 && newSize !== this.gridSize) {
             this.gridSize = newSize;
         }
@@ -1044,18 +1046,27 @@ class IdleSnakeGame {
     // Frutas múltiples
         this.fruits = [];
         this.ensureFruitPopulation();
-    // Redimensionar efectos de baldosa
+    // Redimensionar efectos de baldosa con recentrado
     if (this.tileEffects) this.tileEffects.resize(this.gridSize); else this.tileEffects = new TileEffectMap(this.gridSize);
+    
     // Cestas: preservar en muerte/expansión (preserveStats=true), limpiar solo en resets totales
     if (preserveStats) {
         if (this.basketMap) this.basketMap.resize(this.gridSize); else this.basketMap = new BasketMap(this.gridSize);
     } else {
         this.basketMap = new BasketMap(this.gridSize);
     }
-        // Limpiar pathfinding
-        if (this.pathfindingAI) this.pathfindingAI.reset();
-        // Reset muros para nueva partida (estructura de campo, conservar inventario interno)
-        if (this.wallManager) this.wallManager.resetForNewGame();
+    
+    // Muros: redimensionar y recentrar si el tamaño cambió
+    if (this.wallManager) {
+        if (oldSize !== this.gridSize && preserveStats) {
+            this.wallManager.resize(oldSize, this.gridSize);
+        } else {
+            this.wallManager.resetForNewGame();
+        }
+    }
+    
+    // Limpiar pathfinding
+    if (this.pathfindingAI) this.pathfindingAI.reset();
         // Stats
         if (!preserveStats) {
             this.stats.currentLength = GAME_CONFIG.INITIAL_SNAKE_LENGTH;

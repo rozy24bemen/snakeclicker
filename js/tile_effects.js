@@ -15,12 +15,29 @@ class TileEffectMap {
     }
 
     resize(newSize) {
+        const oldSize = this.gridSize;
         const newMap = this.createEmptyMap(newSize);
-        for (let y = 0; y < Math.min(newSize, this.map.length); y++) {
-            for (let x = 0; x < Math.min(newSize, this.map[0].length); x++) {
-                newMap[y][x] = this.map[y][x];
+        
+        // Calcular desplazamiento para mantener elementos centrados
+        const oldCenter = Math.floor(oldSize / 2);
+        const newCenter = Math.floor(newSize / 2);
+        const offsetX = newCenter - oldCenter;
+        const offsetY = newCenter - oldCenter;
+        
+        // Reposicionar efectos de baldosas existentes con el offset de centrado
+        for (let y = 0; y < oldSize; y++) {
+            for (let x = 0; x < oldSize; x++) {
+                if (this.map[y][x] !== null) {
+                    const newX = x + offsetX;
+                    const newY = y + offsetY;
+                    // Solo colocar si la nueva posición está dentro del tablero
+                    if (newX >= 0 && newX < newSize && newY >= 0 && newY < newSize) {
+                        newMap[newY][newX] = this.map[y][x];
+                    }
+                }
             }
         }
+        
         this.gridSize = newSize;
         this.map = newMap;
     }

@@ -265,7 +265,12 @@ function setupDeveloperTools() {
     
     // Funciones de ayuda para debugging
     window.givePC = (amount) => {
-        game.stats.addGrowthPoints(amount);
+        game.stats.addMoney(amount);
+        game.updateUI();
+    };
+    
+    window.giveMoney = (amount) => {
+        game.stats.addMoney(amount);
         game.updateUI();
     };
     
@@ -273,10 +278,43 @@ function setupDeveloperTools() {
         game.stats.pureDNA += amount;
         game.updateUI();
     };
+
+    window.giveDNA = (amount) => {
+        game.stats.addPureDNA(amount);
+        game.updateUI();
+    };
     
     window.forceMaxLength = () => {
         game.stats.maxLength = 100;
         game.updateUI();
+    };
+
+    // Comandos adicionales para testing
+    window.forcePrestige = () => {
+        if (!game.stats.getHasPrestiged()) {
+            game.stats.hasPrestiged = true;
+            console.log("Prestigio forzado activado");
+        }
+        game.updateUI();
+    };
+
+    window.spawnGolden = () => {
+        if (game.fruits && game.fruits.length > 0) {
+            game.fruits[0].setType('golden');
+            console.log("Manzana Dorada spawneada");
+        }
+    };
+
+    window.help = () => {
+        console.log(`
+🎮 COMANDOS DE DEBUG DISPONIBLES:
+💰 givePC(amount) o giveMoney(amount) - Dar dinero ($)
+🧬 giveCM(amount) o giveDNA(amount) - Dar ADN Puro  
+📏 forceMaxLength() - Forzar longitud máxima a 100
+🏆 forcePrestige() - Activar estado de prestigio
+🍎 spawnGolden() - Convertir primera fruta en dorada
+❓ help() - Mostrar esta ayuda
+        `);
     };
     
     window.toggleGodMode = () => {
