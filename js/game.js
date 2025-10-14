@@ -328,7 +328,7 @@ class IdleSnakeGame {
         }, 1000);
     }
 
-    // Reiniciar partida (mantener mejoras y PC)
+    // Reiniciar partida (mantener mejoras y $)
     restartRun() {
         // Mantener mejoras pero reiniciar entidades sobre el tamaño actual
         this.resetGame(this.gridSize, { preserveStats: true });
@@ -363,7 +363,7 @@ class IdleSnakeGame {
         }
         // Dorada post-prestigio: multiplicador global
         if (this.stats.getHasPrestiged() && fruit.type === 'golden') {
-            const gm = GAME_CONFIG.ECONOMY?.GOLDEN_FRUIT_MULTIPLIER_BASE ?? 10;
+            const gm = this.upgradeManager.getCurrentGoldenMultiplier();
             reward = Math.floor(reward * gm);
         }
         this.stats.eatFruit(reward);
@@ -389,7 +389,7 @@ class IdleSnakeGame {
             const f = new Fruit(this.gridSize);
             // Doradas solo tras prestigio
             if (this.stats.getHasPrestiged()) {
-                const goldenChance = GAME_CONFIG.ECONOMY?.GOLDEN_FRUIT_CHANCE_BASE ?? 0.01;
+                const goldenChance = this.upgradeManager.getCurrentGoldenChance();
                 if (Math.random() < goldenChance) f.setType('golden');
             }
             const exclude = [
@@ -644,9 +644,9 @@ class IdleSnakeGame {
         }
 
         // Instrucciones de baldosas
-        const invText = `PC ${this.tileInventory.PC_MULT} | SPD ${this.tileInventory.SPEED}`;
+        const invText = `$ ${this.tileInventory.PC_MULT} | SPD ${this.tileInventory.SPEED}`;
         if (this.tilePlacementMode) {
-            const typeText = this.tilePlacementType === TILE_EFFECTS.SPEED ? 'SPD' : 'PC';
+            const typeText = this.tilePlacementType === TILE_EFFECTS.SPEED ? 'SPD' : '$';
             this.ctx.fillText(`Baldosas: Click para colocar [${typeText}] • Shift+Click para remover • Inv: ${invText}`, this.canvas.width / 2, y);
             y += 20;
         } else {
@@ -701,7 +701,7 @@ class IdleSnakeGame {
     const totalSpeedMult = baseMult * speedMultTile * boostMult;
     if (this.speedMultEl) this.speedMultEl.textContent = `x${totalSpeedMult.toFixed(1)}`;
     // Mini-HUD texto
-    if (this.miniHudPc) this.miniHudPc.textContent = `+${tileBonus} PC`;
+    if (this.miniHudPc) this.miniHudPc.textContent = `+${tileBonus} $`;
     if (this.miniHudSpd) this.miniHudSpd.textContent = `x${speedMultTile.toFixed(1)} SPD`;
         
         // Actualizar mejoras
@@ -724,14 +724,14 @@ class IdleSnakeGame {
                                     (this.tileInventory.PC_MULT + this.tileInventory.SPEED) === 0;
         const totalInv = (this.tileInventory.PC_MULT + this.tileInventory.SPEED);
         if (this.tilePlaceBtn) {
-            const invText = `PC ${this.tileInventory.PC_MULT} | SPD ${this.tileInventory.SPEED}`;
+            const invText = `$ ${this.tileInventory.PC_MULT} | SPD ${this.tileInventory.SPEED}`;
             this.tilePlaceBtn.textContent = this.tilePlacementMode ? `Salir Baldosas (${invText})` : `Baldosas (${invText})`;
             this.tilePlaceBtn.disabled = totalInv <= 0;
         }
         // Mostrar/ocultar y habilitar radios según modo e inventario
         if (this.tileTypeControls) {
             this.tileTypeControls.style.display = (this.isEditMode && this.tilePlacementMode) ? 'flex' : 'none';
-            if (this.tileInvText) this.tileInvText.textContent = `PC ${this.tileInventory.PC_MULT} | SPD ${this.tileInventory.SPEED}`;
+            if (this.tileInvText) this.tileInvText.textContent = `$ ${this.tileInventory.PC_MULT} | SPD ${this.tileInventory.SPEED}`;
             if (this.tileTypePcRadio) {
                 this.tileTypePcRadio.disabled = this.tileInventory.PC_MULT <= 0;
                 this.tileTypePcRadio.checked = (this.tilePlacementType === TILE_EFFECTS.PC_MULT);
@@ -1020,7 +1020,7 @@ class IdleSnakeGame {
      * Reinicia el estado dinámico del juego ajustando opcionalmente el tamaño de la cuadrícula.
      * @param {number} newSize - Nuevo tamaño de la cuadrícula. Si se omite, se reutiliza el actual.
      * @param {object} options - Opciones de reinicio.
-     * @param {boolean} options.preserveStats - Si true, mantiene growthPoints, mutaciones y totales.
+     * @param {boolean} options.preserveStats - Si true, mantiene money, mutaciones y totales.
      */
     resetGame(newSize, options = {}) {
         const { preserveStats = false } = options;
@@ -1108,8 +1108,8 @@ class IdleSnakeGame {
     }
 
     placeOrRemoveTileEffect(x, y, remove = false) {
-        // Política de remoción: el juego no descuenta PC al colocar baldosas; por lo tanto,
-        // al remover (Shift+Click) devolvemos la baldosa completa al inventario y no hay reembolso de PC.
+        // Política de remoción: el juego no descuenta $ al colocar baldosas; por lo tanto,
+        // al remover (Shift+Click) devolvemos la baldosa completa al inventario y no hay reembolso de $.
         const existing = this.tileEffects.getEffect(x, y);
         if (remove) {
             if (!existing) return;
@@ -1138,7 +1138,7 @@ class IdleSnakeGame {
 
     syncTileTypeRadios() {
         if (!this.tileTypeControls) return;
-        if (this.tileInvText) this.tileInvText.textContent = `PC ${this.tileInventory.PC_MULT} | SPD ${this.tileInventory.SPEED}`;
+        if (this.tileInvText) this.tileInvText.textContent = `$ ${this.tileInventory.PC_MULT} | SPD ${this.tileInventory.SPEED}`;
         if (this.tileTypePcRadio) {
             this.tileTypePcRadio.disabled = this.tileInventory.PC_MULT <= 0;
             this.tileTypePcRadio.checked = (this.tilePlacementType === TILE_EFFECTS.PC_MULT);

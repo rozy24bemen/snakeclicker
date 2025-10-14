@@ -127,8 +127,8 @@ class UpgradeManager {
 
         const tilePcUpgrade = new Upgrade(
             'tile_pc',
-            'Baldosas PC+',
-            'Añade 1 baldosa PC_MULT colocable por nivel (total {level}).',
+            'Baldosas $+',
+            'Añade 1 baldosa $_MULT colocable por nivel (total {level}).',
             250,
             'money',
             15
@@ -223,10 +223,29 @@ class UpgradeManager {
         const basketPowerUpgrade = new Upgrade(
             'basket_power',
             'Potenciador de Cesta',
-            'Aumenta el multiplicador de cesta. x{level + 2}',
-            2,
+            'Aumenta el multiplicador de cesta. x{(level * 3) + 5}',
+            3,  // Costo más alto en ADN Puro
             'pureDNA',
-            10
+            8   // Menos niveles pero más poderoso
+        );
+
+        // Manzanas Doradas: probabilidad y potencia (post-prestigio, comprables con $)
+        const goldenChanceUpgrade = new Upgrade(
+            'golden_chance',
+            'Probabilidad Dorada',
+            'Aumenta la probabilidad de Manzana Dorada. {level + 1}%',
+            500,  // Costo base alto para ser post-prestigio
+            'money',
+            9     // Máximo 10% (1% base + 9 niveles)
+        );
+
+        const goldenPowerUpgrade = new Upgrade(
+            'golden_power',
+            'Potenciador Dorada',
+            'Aumenta el multiplicador de Manzana Dorada. x{(level * 10) + 10}',
+            750,  // Costo aún mayor para ser premium
+            'money',
+            15    // x10 → x160 máximo
         );
 
         this.upgrades.set('start_speed', startSpeedUpgrade);
@@ -234,6 +253,8 @@ class UpgradeManager {
         this.upgrades.set('fusion_wall', fusionWallUpgrade);
         this.upgrades.set('basket_count', basketCountUpgrade);
         this.upgrades.set('basket_power', basketPowerUpgrade);
+        this.upgrades.set('golden_chance', goldenChanceUpgrade);
+        this.upgrades.set('golden_power', goldenPowerUpgrade);
     }
 
     // Obtener mejora por ID
@@ -327,8 +348,8 @@ class UpgradeManager {
                 break;
             case 'basket_power':
                 if (typeof game !== 'undefined' && game.stats) {
-                    // Base 2 + nivel actual (x3, x4, ...)
-                    const minMult = 2 + level;
+                    // Nuevo cálculo: (nivel * 3) + 5 → x5, x8, x11, x14, etc.
+                    const minMult = (level * 3) + 5;
                     if ((game.stats.basketMultiplier || 0) < minMult) {
                         game.stats.basketMultiplier = minMult;
                     }
@@ -369,6 +390,24 @@ class UpgradeManager {
         return GAME_CONFIG.INITIAL_GRID_SIZE + level;
     }
 
+    // Obtener probabilidad actual de Manzana Dorada
+    getCurrentGoldenChance() {
+        const goldenChanceUpgrade = this.getUpgrade('golden_chance');
+        const upgradeLevel = goldenChanceUpgrade ? goldenChanceUpgrade.currentLevel : 0;
+        // Probabilidad base (1%) + niveles adicionales
+        const baseChance = GAME_CONFIG.ECONOMY?.GOLDEN_FRUIT_CHANCE_BASE ?? 0.01;
+        return baseChance + (upgradeLevel * 0.01); // +1% por nivel
+    }
+
+    // Obtener multiplicador actual de Manzana Dorada
+    getCurrentGoldenMultiplier() {
+        const goldenPowerUpgrade = this.getUpgrade('golden_power');
+        const upgradeLevel = goldenPowerUpgrade ? goldenPowerUpgrade.currentLevel : 0;
+        // Multiplicador base (x10) + niveles adicionales
+        const baseMult = GAME_CONFIG.ECONOMY?.GOLDEN_FRUIT_MULTIPLIER_BASE ?? 10;
+        return baseMult + (upgradeLevel * 10); // +x10 por nivel
+    }
+
     // Verificar si una mejora está disponible para comprar
     isUpgradeAvailable(upgradeId, stats) {
         const upgrade = this.getUpgrade(upgradeId);
@@ -382,6 +421,9 @@ class UpgradeManager {
                 return this.getUpgrade('portal_wall').currentLevel >= 1;
             case 'fusion_wall':
                 return stats.pureDNA >= 1; // Disponible solo después de la primera mutación
+            case 'golden_chance':
+            case 'golden_power':
+                return stats.getHasPrestiged(); // Solo disponible después de prestigiar
         }
 
         return true;
@@ -552,7 +594,7 @@ class UpgradeUI {
 
     // Actualizar mejoras de prestigio
     updatePrestigeUpgrades(stats) {
-        const upgrades = ['start_speed', 'start_multiplier', 'fusion_wall', 'basket_count', 'basket_power'];
+        const upgrades = ['start_speed', 'start_multiplier', 'fusion_wall', 'basket_count', 'basket_power', 'golden_chance', 'golden_power'];
         this.updateUpgradeContainer(this.containers.prestige, upgrades, stats);
     }
 
