@@ -157,6 +157,17 @@ body {
     cursor: not-allowed;
 }
 
+.danger-btn {
+    background: rgba(220, 53, 69, 0.8);
+    border-color: rgba(220, 53, 69, 0.9);
+}
+
+.danger-btn:hover:not(:disabled) {
+    background: rgba(220, 53, 69, 1);
+    border-color: rgba(220, 53, 69, 1);
+    transform: translateY(-2px);
+}
+
 /* Panel de mejoras */
 .upgrades-panel {
     width: 350px;
