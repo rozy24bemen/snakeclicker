@@ -76,13 +76,37 @@ const MathUtils = {
 
     // Generar posición aleatoria válida
     getRandomPosition: (gridSize, excludePositions = []) => {
+        // FIX: Prevenir bucle infinito cuando el tablero está lleno
+        const maxAttempts = gridSize * gridSize; // Máximo una vez por cada celda
+        let attempts = 0;
         let position;
+        
         do {
             position = {
                 x: Math.floor(Math.random() * gridSize),
                 y: Math.floor(Math.random() * gridSize)
             };
+            attempts++;
+            
+            // Si hemos intentado demasiado, el tablero está probablemente lleno
+            if (attempts >= maxAttempts) {
+                console.error('[MathUtils] getRandomPosition: Máximo de intentos alcanzado, tablero posiblemente lleno');
+                // Retornar cualquier posición libre que podamos encontrar
+                for (let x = 0; x < gridSize; x++) {
+                    for (let y = 0; y < gridSize; y++) {
+                        const candidate = { x, y };
+                        if (!excludePositions.some(pos => pos.x === x && pos.y === y)) {
+                            console.log(`[MathUtils] Posición libre encontrada en exhaustive search: (${x}, ${y})`);
+                            return candidate;
+                        }
+                    }
+                }
+                // Si llegamos aquí, no hay posiciones libres en absoluto
+                console.error('[MathUtils] NO HAY POSICIONES LIBRES DISPONIBLES!');
+                return null; // Esto indicará al llamador que no se pudo generar posición
+            }
         } while (excludePositions.some(pos => pos.x === position.x && pos.y === position.y));
+        
         return position;
     },
 

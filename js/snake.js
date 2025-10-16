@@ -184,12 +184,19 @@ class Fruit {
         this.gridSize = gridSize;
         this.position = { x: 0, y: 0 };
         this.type = 'normal'; // 'normal' | 'golden'
-        this.generateNewPosition();
+        this.valid = this.generateNewPosition(); // Almacenar si la posición es válida
     }
 
     // Generar nueva posición para la fruta
     generateNewPosition(excludePositions = []) {
-        this.position = MathUtils.getRandomPosition(this.gridSize, excludePositions);
+        const newPosition = MathUtils.getRandomPosition(this.gridSize, excludePositions);
+        if (newPosition) {
+            this.position = newPosition;
+            return true; // Éxito
+        } else {
+            console.error('[Fruit] No se pudo generar nueva posición - tablero lleno');
+            return false; // Falló
+        }
     }
 
     // Asignar tipo (externo decidirá golden con probabilidad)

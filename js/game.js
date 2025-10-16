@@ -651,6 +651,13 @@ class IdleSnakeGame {
         
         while (attempts < maxAttempts) {
             const f = new Fruit(this.gridSize);
+            
+            // FIX: Verificar si la fruta se creó con posición válida
+            if (!f.valid) {
+                attempts++;
+                continue; // La fruta no se pudo posicionar, tablero lleno
+            }
+            
             // Doradas solo tras prestigio
             if (this.stats.getHasPrestiged()) {
                 const goldenChance = this.upgradeManager.getCurrentGoldenChance();
@@ -673,7 +680,11 @@ class IdleSnakeGame {
             if (candidate) {
                 f.position = { x: candidate.x, y: candidate.y };
             } else {
-                f.generateNewPosition(exclude);
+                // FIX: Verificar si se pudo generar posición válida
+                if (!f.generateNewPosition(exclude)) {
+                    attempts++;
+                    continue; // No se pudo generar posición, tablero muy lleno
+                }
             }
             // Validar repulsión
             if (!this.wallManager.checkFruitRepulsion || !this.wallManager.checkFruitRepulsion(f)) {
