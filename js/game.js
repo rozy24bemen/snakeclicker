@@ -385,6 +385,9 @@ class IdleSnakeGame {
             return;
         }
 
+        // Wall 2: Verificar si la cabeza activó un glifo CONSUMER
+        this.checkGlyphConsumerActivation();
+
         // Procesar interacciones con muros
         const wallInteraction = this.wallManager.processSnakeWallInteraction(this.snake);
         if (wallInteraction) {
@@ -425,6 +428,68 @@ class IdleSnakeGame {
                 this.currentComboMultiplier += 0.5;
             }
         }
+    }
+
+    // Wall 2: Verificar activación de glifos CONSUMER (sacrificio)
+    checkGlyphConsumerActivation() {
+        // Si no hay mapa de glifos, no verificar
+        if (!this.glyphMap) return;
+
+        // Obtener posición de la cabeza de la serpiente
+        const head = this.snake.getHead();
+        if (!head) return;
+
+        // Verificar si hay un glifo CONSUMER en la posición de la cabeza
+        const glyph = this.glyphMap.getGlyph(head.x, head.y);
+        if (glyph === GLYPH_TYPES.CONSUMER) {
+            this.activateGlyphConsumer();
+        }
+    }
+
+    // Wall 2: Activar efecto de glifo CONSUMER (sacrificio estratégico)
+    activateGlyphConsumer() {
+        // Protección: no sacrificar si la longitud ya es mínima (3 segmentos)
+        if (this.snake.length <= 3) return;
+
+        // Realizar el sacrificio: reducir longitud en 1 segmento
+        this.snake.body.pop(); // Remover último segmento (cola)
+        
+        // Calcular recompensa monetaria (equivalente a ~3 frutas doradas)
+        const rewardAmount = 500; // Base fija por sacrificio
+        this.stats.addMoney(rewardAmount);
+        
+        // Log del evento para debug
+        Logger.log(`Glifo CONSUMER activado: -1 longitud, +$${rewardAmount}`);
+        
+        // Mostrar feedback visual
+        this.showSacrificeNotification(rewardAmount);
+    }
+
+    // Wall 2: Mostrar notificación visual del sacrificio
+    showSacrificeNotification(rewardAmount) {
+        // Crear elemento de notificación
+        const notification = document.createElement('div');
+        notification.className = 'sacrifice-notification';
+        notification.innerHTML = `
+            <div class="sacrifice-content">
+                <span class="sacrifice-icon">⚡</span>
+                <span class="sacrifice-text">¡Glifo de Sacrificio!</span>
+                <span class="sacrifice-effect">Longitud -1, +$${rewardAmount}</span>
+            </div>
+        `;
+        
+        // Agregar al DOM
+        document.body.appendChild(notification);
+        
+        // Animar y remover después de 3 segundos
+        setTimeout(() => {
+            notification.classList.add('sacrifice-fade-out');
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 500);
+        }, 2500);
     }
 
     // Manejar muerte de la serpiente
