@@ -42,6 +42,7 @@ class IdleSnakeGame {
     
     // Wall 2: Glifos de Combo - Sistema Acumulativo
     this.currentComboMultiplier = 0.0;       // Multiplicador acumulado por serpiente en GLYPH_COMBO
+    this.prestigeUnlockedShown = false;      // Control para mostrar popup de prestigio solo una vez
     this.tilePlacementType = (typeof TILE_EFFECTS !== 'undefined' && TILE_EFFECTS.PC_MULT) ? TILE_EFFECTS.PC_MULT : 'PC_MULT';
     this.tileInventory = { PC_MULT: 0, SPEED: 0 };
     this.gameLoopId = null;
@@ -460,9 +461,6 @@ class IdleSnakeGame {
         
         // Log del evento para debug
         Logger.log(`Glifo CONSUMER activado: -1 longitud, +$${rewardAmount}`);
-        
-        // Mostrar feedback visual
-        this.showSacrificeNotification(rewardAmount);
     }
 
     // Wall 2: Mostrar notificación visual del sacrificio
@@ -490,6 +488,62 @@ class IdleSnakeGame {
                 }
             }, 500);
         }, 2500);
+    }
+
+    // Mostrar número flotante al comer fruta
+    showFloatingNumber(amount, position) {
+        // Crear elemento de número flotante
+        const floatingNumber = document.createElement('div');
+        floatingNumber.className = 'floating-number';
+        floatingNumber.textContent = `+${FormatUtils.formatNumber(amount)}$`;
+        
+        // Calcular posición en pantalla basada en posición del grid
+        const canvas = document.getElementById('game-canvas');
+        const rect = canvas.getBoundingClientRect();
+        const cellSize = Math.min(rect.width / this.gridSize, rect.height / this.gridSize);
+        
+        const screenX = rect.left + (position.x * cellSize) + (cellSize / 2);
+        const screenY = rect.top + (position.y * cellSize) + (cellSize / 2);
+        
+        floatingNumber.style.left = screenX + 'px';
+        floatingNumber.style.top = screenY + 'px';
+        
+        // Agregar al DOM
+        document.body.appendChild(floatingNumber);
+        
+        // Animar y remover después de la animación
+        setTimeout(() => {
+            if (floatingNumber.parentNode) {
+                floatingNumber.parentNode.removeChild(floatingNumber);
+            }
+        }, 2000); // Duración de la animación CSS
+    }
+
+    // Mostrar notificación de prestigio desbloqueado
+    showPrestigeUnlockedNotification() {
+        // Crear elemento de notificación
+        const notification = document.createElement('div');
+        notification.className = 'prestige-unlock-notification';
+        notification.innerHTML = `
+            <div class="prestige-unlock-content">
+                <span class="prestige-unlock-icon">🏆</span>
+                <span class="prestige-unlock-title">¡PRESTIGIO DESBLOQUEADO!</span>
+                <span class="prestige-unlock-description">Ahora puedes acceder a mejoras avanzadas</span>
+            </div>
+        `;
+        
+        // Agregar al DOM
+        document.body.appendChild(notification);
+        
+        // Animar y remover después de 4 segundos
+        setTimeout(() => {
+            notification.classList.add('prestige-unlock-fade-out');
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 500);
+        }, 3500);
     }
 
     // Manejar muerte de la serpiente
@@ -552,6 +606,10 @@ class IdleSnakeGame {
         }
         
         this.stats.eatFruit(reward);
+        
+        // Mostrar animación de números flotantes
+        this.showFloatingNumber(reward, pos);
+        
         if (fruit.type === 'golden') Logger.log('Golden Apple consumida');
         Logger.log(`Fruta comida (${fruit.type}). $ ganados: ${reward}`);
     }
@@ -921,6 +979,14 @@ class IdleSnakeGame {
         this.prestigeReady = (this.gridSize >= gridCap) && (this.stats.money >= moneyThreshold);
         if (prestigeSection) {
             const showPrestige = this.stats.getHasPrestiged() || (this.gridSize >= gridCap);
+            const wasHidden = prestigeSection.style.display === 'none';
+            
+            // Mostrar popup solo cuando se desbloquea por primera vez
+            if (showPrestige && wasHidden && !this.stats.getHasPrestiged() && !this.prestigeUnlockedShown) {
+                this.showPrestigeUnlockedNotification();
+                this.prestigeUnlockedShown = true;
+            }
+            
             prestigeSection.style.display = showPrestige ? 'block' : 'none';
         }
         
