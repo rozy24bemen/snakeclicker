@@ -620,14 +620,35 @@ class IdleSnakeGame {
         const cultivo = this.upgradeManager.getUpgrade('cultivo');
         const extra = cultivo ? cultivo.currentLevel : 0;
         const desired = 1 + extra; // base 1
-        while (this.fruits.length < desired) {
+        
+        // FIX: Prevenir bucle infinito con límite de intentos
+        let failedAttempts = 0;
+        const maxFailedAttempts = 3; // Máximo 3 intentos consecutivos fallidos
+        
+        while (this.fruits.length < desired && failedAttempts < maxFailedAttempts) {
             const fruit = this.createFruit();
-            if (fruit) this.fruits.push(fruit); else break;
+            if (fruit) {
+                this.fruits.push(fruit);
+                failedAttempts = 0; // Reset contador en éxito
+            } else {
+                failedAttempts++;
+                Logger.warn(`No se pudo generar fruta. Intento ${failedAttempts}/${maxFailedAttempts}`);
+            }
+        }
+        
+        // Si no se pudo generar frutas, es posible que el tablero esté muy lleno
+        if (failedAttempts >= maxFailedAttempts && this.fruits.length === 0) {
+            Logger.error('Tablero demasiado lleno para generar frutas. Considerando reset automático...');
+            // En caso extremo, generar al menos una fruta forzada o reiniciar
+            this.handleGridOverflow();
         }
     }
 
     createFruit() {
-        let attempts = 0; const maxAttempts = 100;
+        // FIX: Aumentar límite y calcular dinámicamente según tamaño del grid
+        const maxAttempts = Math.max(100, this.gridSize * 10);
+        let attempts = 0; 
+        
         while (attempts < maxAttempts) {
             const f = new Fruit(this.gridSize);
             // Doradas solo tras prestigio
@@ -662,6 +683,67 @@ class IdleSnakeGame {
         }
         Logger.warn('No se pudo generar nueva fruta multi-intento');
         return null;
+    }
+
+    // FIX: Manejar overflow del grid (tablero demasiado lleno)
+    handleGridOverflow() {
+        Logger.log('Manejando overflow del grid - tablero muy lleno');
+        
+        // Calcular espacio disponible
+        const totalCells = this.gridSize * this.gridSize;
+        const occupiedCells = this.snake.body.length + 
+                             this.wallManager.getAllWallPositions().length + 
+                             this.fruits.length;
+        const freeSpaceRatio = (totalCells - occupiedCells) / totalCells;
+        
+        Logger.log(`Espacio libre: ${(freeSpaceRatio * 100).toFixed(1)}% (${totalCells - occupiedCells}/${totalCells} celdas)`);
+        
+        // Si queda menos del 5% de espacio libre, forzar reinicio de run
+        if (freeSpaceRatio < 0.05) {
+            Logger.warn('Menos del 5% de espacio libre. Forzando reinicio automático...');
+            setTimeout(() => {
+                this.restartRun();
+            }, 1000);
+        } else {
+            // Intentar crear una fruta en cualquier lugar libre (sin sesgos)
+            const forcedFruit = this.createForcedFruit();
+            if (forcedFruit) {
+                this.fruits.push(forcedFruit);
+                Logger.log('Fruta forzada creada exitosamente');
+            }
+        }
+    }
+
+    // Crear fruta forzada en cualquier posición libre disponible
+    createForcedFruit() {
+        const exclude = [
+            ...this.snake.getOccupiedPositions(),
+            ...this.wallManager.getAllWallPositions(),
+            ...this.fruits?.map(fr => fr.position) || []
+        ];
+        
+        // Buscar todas las posiciones libres
+        const freePositions = [];
+        for (let x = 0; x < this.gridSize; x++) {
+            for (let y = 0; y < this.gridSize; y++) {
+                if (!exclude.some(pos => pos.x === x && pos.y === y)) {
+                    freePositions.push({ x, y });
+                }
+            }
+        }
+        
+        if (freePositions.length === 0) {
+            Logger.error('No hay posiciones libres disponibles!');
+            return null;
+        }
+        
+        // Crear fruta en posición aleatoria libre
+        const randomPos = freePositions[Math.floor(Math.random() * freePositions.length)];
+        const fruit = new Fruit(this.gridSize);
+        fruit.position = randomPos;
+        
+        Logger.log(`Fruta forzada creada en (${randomPos.x}, ${randomPos.y})`);
+        return fruit;
     }
 
     // Renderizar el juego
@@ -1265,6 +1347,10 @@ class IdleSnakeGame {
         this.stats.save();
         this.upgradeManager.save();
         this.wallManager.save();
+        
+        //FIX: Guardar gridSize para persistencia
+        StorageUtils.save('gridSize', this.gridSize);
+        
         Logger.log('Estado del juego guardado');
         if (this.tileEffects) StorageUtils.save('tileEffects', this.tileEffects.serialize());
         StorageUtils.save('tileInventory', this.tileInventory);
@@ -1277,8 +1363,9 @@ class IdleSnakeGame {
         this.stats.load();
         this.upgradeManager.load();
         this.wallManager.load();
-        // Mantener grid inicial base (expansiones futuras usarán resetGame)
-        this.gridSize = GAME_CONFIG.INITIAL_GRID_SIZE;
+        
+        // FIX: Cargar gridSize guardado o usar inicial por defecto
+        this.gridSize = StorageUtils.load('gridSize', GAME_CONFIG.INITIAL_GRID_SIZE);
         this.updateCanvasSize();
         const te = StorageUtils.load('tileEffects', null);
         if (te) {
