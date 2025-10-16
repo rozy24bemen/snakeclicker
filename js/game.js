@@ -54,6 +54,7 @@ class IdleSnakeGame {
         this.wallManager = new WallManager();
     this.pathfindingAI = new PathfindingAI();
     this.tileEffects = new TileEffectMap(this.gridSize);
+        this.glyphMap = new GlyphMap(this.gridSize);  // Sistema de glifos de ADN
         
         // Inicializar tamaño de cuadrícula (arranca siempre en base y expansión futura ajustará)
     this.gridSize = GAME_CONFIG.INITIAL_GRID_SIZE; // expansión futura modificará via resetGame()
@@ -443,6 +444,9 @@ class IdleSnakeGame {
         // Dibujar cestas (debajo de serpiente)
         this.renderBaskets();
         
+        // Dibujar glifos de ADN (debajo de serpiente)
+        this.renderGlyphs();
+        
         // Dibujar serpiente
         this.renderSnake();
         
@@ -576,6 +580,12 @@ class IdleSnakeGame {
             this.ctx.textBaseline = 'middle';
             this.ctx.fillText('C', canvasPos.x + GAME_CONFIG.CELL_SIZE / 2, canvasPos.y + GAME_CONFIG.CELL_SIZE / 2);
         });
+    }
+
+    // Renderizar glifos de ADN
+    renderGlyphs() {
+        if (!this.glyphMap) return;
+        this.glyphMap.render(this.ctx, GAME_CONFIG.CELL_SIZE);
     }
 
     // Renderizar serpiente
@@ -984,6 +994,7 @@ class IdleSnakeGame {
         if (this.tileEffects) StorageUtils.save('tileEffects', this.tileEffects.serialize());
         StorageUtils.save('tileInventory', this.tileInventory);
     if (this.basketMap) StorageUtils.save('basketMap', this.basketMap.serialize());
+        if (this.glyphMap) StorageUtils.save('glyphMap', this.glyphMap.serialize());
     }
 
     // Cargar estado del juego
@@ -1003,6 +1014,8 @@ class IdleSnakeGame {
     this.tileInventory = StorageUtils.load('tileInventory', { PC_MULT: 0, SPEED: 0 });
         const bm = StorageUtils.load('basketMap', null);
         this.basketMap = bm ? BasketMap.deserialize(bm) : new BasketMap(this.gridSize);
+        const gm = StorageUtils.load('glyphMap', null);
+        this.glyphMap = gm ? GlyphMap.deserialize(gm) : new GlyphMap(this.gridSize);
         // Recalcular inventario y multiplicador de cestas según upgrades permanentes si ya prestigió
         if (this.stats.getHasPrestiged()) {
             const basketCountLevel = this.upgradeManager?.getUpgrade?.('basket_count')?.currentLevel || 0;
@@ -1049,6 +1062,13 @@ class IdleSnakeGame {
         this.ensureFruitPopulation();
     // Redimensionar efectos de baldosa con recentrado
     if (this.tileEffects) this.tileEffects.resize(this.gridSize); else this.tileEffects = new TileEffectMap(this.gridSize);
+    
+    // Redimensionar mapa de glifos con recentrado
+    if (preserveStats) {
+        if (this.glyphMap) this.glyphMap.resize(this.gridSize); else this.glyphMap = new GlyphMap(this.gridSize);
+    } else {
+        this.glyphMap = new GlyphMap(this.gridSize);
+    }
     
     // Cestas: preservar en muerte/expansión (preserveStats=true), limpiar solo en resets totales
     if (preserveStats) {
