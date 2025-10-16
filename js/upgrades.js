@@ -248,6 +248,25 @@ class UpgradeManager {
             15    // x10 → x160 máximo
         );
 
+        // Glifos de ADN (Wall 2) - Desbloqueados tras expandir más allá de 10x10
+        const glyphComboUpgrade = new Upgrade(
+            'glyph_combo',
+            '🔮 Glifo de Resonancia',
+            'Baldosa especial que acumula poder por cada segmento de serpiente. Cantidad: {level}',
+            2,     // Costo base en ADN Puro
+            'pureDNA',
+            10     // Máximo 10 glifos
+        );
+
+        const glyphConsumerUpgrade = new Upgrade(
+            'glyph_consumer',
+            '⚡ Glifo Consumidor',
+            'Baldosa que sacrifica longitud por dinero (+500$ por segmento). Cantidad: {level}',
+            3,     // Costo más alto por ser más poderoso
+            'pureDNA',
+            10     // Máximo 10 glifos
+        );
+
         this.upgrades.set('start_speed', startSpeedUpgrade);
         this.upgrades.set('start_multiplier', startMultiplierUpgrade);
         this.upgrades.set('fusion_wall', fusionWallUpgrade);
@@ -255,6 +274,8 @@ class UpgradeManager {
         this.upgrades.set('basket_power', basketPowerUpgrade);
         this.upgrades.set('golden_chance', goldenChanceUpgrade);
         this.upgrades.set('golden_power', goldenPowerUpgrade);
+        this.upgrades.set('glyph_combo', glyphComboUpgrade);
+        this.upgrades.set('glyph_consumer', glyphConsumerUpgrade);
     }
 
     // Obtener mejora por ID
@@ -424,6 +445,12 @@ class UpgradeManager {
             case 'golden_chance':
             case 'golden_power':
                 return stats.getHasPrestiged(); // Solo disponible después de prestigiar
+            case 'glyph_combo':
+            case 'glyph_consumer':
+                // Wall 2: Disponible cuando el grid es > 10x10 (tras prestigio y expansión adicional)
+                const expansionLevel = this.getUpgrade('expansion')?.currentLevel || 0;
+                const currentGridSize = GAME_CONFIG.INITIAL_GRID_SIZE + expansionLevel;
+                return currentGridSize > 10 && stats.getHasPrestiged();
         }
 
         return true;
@@ -492,7 +519,8 @@ class UpgradeUI {
             basic: document.getElementById('basic-upgrades'),
             expansion: document.getElementById('expansion-upgrades'),
             walls: document.getElementById('wall-upgrades'),
-            prestige: document.getElementById('prestige-upgrades')
+            prestige: document.getElementById('prestige-upgrades'),
+            glyphs: document.getElementById('glyph-upgrades')
         };
     }
 
@@ -502,7 +530,9 @@ class UpgradeUI {
         this.updateExpansionUpgrades(stats, currentGridSize);
         this.updateWallUpgrades(stats);
         this.updatePrestigeUpgrades(stats);
+        this.updateGlyphUpgrades(stats);
         this.updatePrestigeVisibility(stats);
+        this.updateGlyphVisibility(stats);
 
         // Si existe la carta de prestigio, actualizar su estado de compra
         if (this._prestigeBtn && typeof this._prestigeCost === 'number') {
@@ -599,6 +629,27 @@ class UpgradeUI {
         this.updateUpgradeContainer(this.containers.prestige, upgrades, stats);
     }
 
+    // Actualizar mejoras de glifos
+    updateGlyphUpgrades(stats) {
+        const upgrades = ['glyph_combo', 'glyph_consumer'];
+        this.updateUpgradeContainer(this.containers.glyphs, upgrades, stats);
+        this.updateGlyphInventoryDisplay(stats);
+    }
+
+    // Actualizar display del inventario de glifos
+    updateGlyphInventoryDisplay(stats) {
+        const comboCount = document.getElementById('glyph-combo-count');
+        const consumerCount = document.getElementById('glyph-consumer-count');
+        
+        if (comboCount && consumerCount) {
+            const comboLevel = this.upgradeManager?.getUpgrade?.('glyph_combo')?.currentLevel || 0;
+            const consumerLevel = this.upgradeManager?.getUpgrade?.('glyph_consumer')?.currentLevel || 0;
+            
+            comboCount.textContent = `${comboLevel}/10`;
+            consumerCount.textContent = `${consumerLevel}/10`;
+        }
+    }
+
     // Actualizar visibilidad de la sección de prestigio
     updatePrestigeVisibility(stats) {
         const prestigeSection = document.querySelector('.prestige-section');
@@ -608,6 +659,18 @@ class UpgradeUI {
             const gridSizeNow = GAME_CONFIG.INITIAL_GRID_SIZE + expansionLevel;
             const show = (typeof stats.getHasPrestiged === 'function' && stats.getHasPrestiged()) || gridSizeNow >= 10 || (stats.pureDNA > 0);
             prestigeSection.style.display = show ? 'block' : 'none';
+        }
+    }
+
+    // Actualizar visibilidad de la sección de glifos (Wall 2)
+    updateGlyphVisibility(stats) {
+        const glyphSection = document.querySelector('.glyph-section');
+        if (glyphSection) {
+            // Mostrar si ya prestigió Y el grid es > 10x10 (Wall 2)
+            const expansionLevel = this.upgradeManager?.getUpgrade?.('expansion')?.currentLevel || 0;
+            const gridSizeNow = GAME_CONFIG.INITIAL_GRID_SIZE + expansionLevel;
+            const show = (typeof stats.getHasPrestiged === 'function' && stats.getHasPrestiged()) && gridSizeNow > 10;
+            glyphSection.style.display = show ? 'block' : 'none';
         }
     }
 

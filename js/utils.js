@@ -24,6 +24,10 @@ const GAME_CONFIG = {
         PC_MULT: '#1E88E5',
         SPEED: '#FF9800'
     },
+    GLYPH_COLORS: {
+        COMBO: '#9C27B0',        // Púrpura para resonancia
+        CONSUMER: '#E91E63'      // Rosa para consumidor
+    },
     ECONOMY: {
         PRESTIGE_MONEY_THRESHOLD: 10000,   // Threshold en $ para prestigio
         GOLDEN_FRUIT_CHANCE_BASE: 0.01,    // 1% tras prestigio
@@ -35,6 +39,12 @@ const GAME_CONFIG = {
 const TILE_EFFECTS = {
     PC_MULT: 'PC_MULT',
     SPEED: 'SPEED'
+};
+
+// Tipos de glifos de ADN
+const GLYPH_TYPES = {
+    COMBO: 'GLYPH_COMBO',      // Resonancia: acumula multiplicador por segmentos
+    CONSUMER: 'GLYPH_CONSUMER'  // Sacrificio: consume longitud por dinero
 };
 
 // Direcciones de movimiento
