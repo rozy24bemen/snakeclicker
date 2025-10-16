@@ -47,11 +47,17 @@
                     <button id="edit-mode-btn" class="control-btn" disabled>Modo Edición</button>
                     <button id="tile-place-btn" class="control-btn" disabled style="display:none;">Baldosas</button>
                     <button id="basket-place-btn" class="control-btn" disabled>Cestas</button>
+                    <button id="glyph-place-btn" class="control-btn" disabled style="display:none;">🧬 Glifos</button>
                     <button id="reset-game-btn" class="control-btn danger-btn" onclick="restartGame()">🔄 Reiniciar Progreso</button>
                     <div class="tile-type-controls" id="tile-type-controls" style="display:none;">
                         <label><input type="radio" name="tile-type" id="tile-type-pc" value="PC" checked> PC</label>
                         <label><input type="radio" name="tile-type" id="tile-type-spd" value="SPD"> SPD</label>
                         <span class="tile-inv" id="tile-inv-text">PC 0 | SPD 0</span>
+                    </div>
+                    <div class="glyph-type-controls" id="glyph-type-controls" style="display:none;">
+                        <label><input type="radio" name="glyph-type" id="glyph-type-combo" value="COMBO" checked> 🔮 Combo</label>
+                        <label><input type="radio" name="glyph-type" id="glyph-type-consumer" value="CONSUMER"> ⚡ Consumidor</label>
+                        <span class="glyph-inv" id="glyph-inv-text">🔮 0 | ⚡ 0</span>
                     </div>
                     <button id="pause-btn" class="control-btn">Pausar</button>
                 </div>

@@ -9,10 +9,15 @@ class IdleSnakeGame {
     this.editModeBtn = document.getElementById('edit-mode-btn');
     this.tilePlaceBtn = document.getElementById('tile-place-btn');
     this.basketPlaceBtn = document.getElementById('basket-place-btn');
+    this.glyphPlaceBtn = document.getElementById('glyph-place-btn');
     this.tileTypeControls = document.getElementById('tile-type-controls');
     this.tileTypePcRadio = document.getElementById('tile-type-pc');
     this.tileTypeSpdRadio = document.getElementById('tile-type-spd');
     this.tileInvText = document.getElementById('tile-inv-text');
+    this.glyphTypeControls = document.getElementById('glyph-type-controls');
+    this.glyphTypeComboRadio = document.getElementById('glyph-type-combo');
+    this.glyphTypeConsumerRadio = document.getElementById('glyph-type-consumer');
+    this.glyphInvText = document.getElementById('glyph-inv-text');
         
     // Elementos de estadísticas
         this.moneyCounter = document.getElementById('money-counter');
@@ -31,6 +36,8 @@ class IdleSnakeGame {
     this.isEditMode = false;
     this.tilePlacementMode = false;
     this.basketPlacementMode = false;
+    this.glyphPlacementMode = false;         // Nuevo: modo colocación glifos
+    this.selectedGlyphType = GLYPH_TYPES.COMBO; // Tipo de glifo seleccionado
     this.tilePlacementType = (typeof TILE_EFFECTS !== 'undefined' && TILE_EFFECTS.PC_MULT) ? TILE_EFFECTS.PC_MULT : 'PC_MULT';
     this.tileInventory = { PC_MULT: 0, SPEED: 0 };
     this.gameLoopId = null;
@@ -119,6 +126,27 @@ class IdleSnakeGame {
                 this.updateUI();
             });
         }
+        
+        // Botón de colocación de glifos
+        if (this.glyphPlaceBtn) {
+            this.glyphPlaceBtn.addEventListener('click', () => {
+                if (!this.isEditMode) this.toggleEditMode();
+                if (!this.stats.getHasPrestiged()) return;
+                const totalGlyphs = (this.stats.glyphInventory?.combo || 0) + (this.stats.glyphInventory?.consumer || 0);
+                if (totalGlyphs <= 0) return;
+                this.glyphPlacementMode = !this.glyphPlacementMode;
+                // Al activar, seleccionar el tipo según disponibilidad
+                if (this.glyphPlacementMode) {
+                    if (this.selectedGlyphType === GLYPH_TYPES.COMBO && (this.stats.glyphInventory?.combo || 0) <= 0 && (this.stats.glyphInventory?.consumer || 0) > 0) {
+                        this.selectedGlyphType = GLYPH_TYPES.CONSUMER;
+                    } else if (this.selectedGlyphType === GLYPH_TYPES.CONSUMER && (this.stats.glyphInventory?.consumer || 0) <= 0 && (this.stats.glyphInventory?.combo || 0) > 0) {
+                        this.selectedGlyphType = GLYPH_TYPES.COMBO;
+                    }
+                }
+                this.syncGlyphTypeRadios();
+                this.updateUI();
+            });
+        }
 
         // Radio change handlers
         if (this.tileTypePcRadio) {
@@ -130,6 +158,20 @@ class IdleSnakeGame {
         if (this.tileTypeSpdRadio) {
             this.tileTypeSpdRadio.addEventListener('change', () => {
                 if (this.tileTypeSpdRadio.checked) this.tilePlacementType = TILE_EFFECTS.SPEED;
+                this.updateUI();
+            });
+        }
+        
+        // Radio change handlers para glifos
+        if (this.glyphTypeComboRadio) {
+            this.glyphTypeComboRadio.addEventListener('change', () => {
+                if (this.glyphTypeComboRadio.checked) this.selectedGlyphType = GLYPH_TYPES.COMBO;
+                this.updateUI();
+            });
+        }
+        if (this.glyphTypeConsumerRadio) {
+            this.glyphTypeConsumerRadio.addEventListener('change', () => {
+                if (this.glyphTypeConsumerRadio.checked) this.selectedGlyphType = GLYPH_TYPES.CONSUMER;
                 this.updateUI();
             });
         }
@@ -189,6 +231,52 @@ class IdleSnakeGame {
             }
             return;
         }
+        
+        // Colocación de Glifos (click normal para colocar, Shift+Click para remover)
+        if (this.glyphPlacementMode && this.stats.getHasPrestiged()) {
+            const x = cellPosition.x, y = cellPosition.y;
+            const removing = e.shiftKey === true;
+            
+            if (removing) {
+                // Remover glifo y devolver al inventario
+                const glyphType = this.glyphMap.getGlyph(x, y);
+                if (glyphType) {
+                    this.glyphMap.removeGlyph(x, y);
+                    if (glyphType === GLYPH_TYPES.COMBO) {
+                        this.stats.addGlyph('combo', 1);
+                    } else if (glyphType === GLYPH_TYPES.CONSUMER) {
+                        this.stats.addGlyph('consumer', 1);
+                    }
+                    this.updateUI();
+                    this.saveGameState();
+                }
+                return;
+            }
+            
+            // Colocar glifo
+            if (!this.glyphMap.hasGlyph(x, y) && 
+                !this.snake.isPositionOccupied(cellPosition) && 
+                !this.wallManager.isPositionOccupied(cellPosition) &&
+                !this.basketMap.isBasket(x, y)) {
+                
+                const hasInventory = (this.selectedGlyphType === GLYPH_TYPES.COMBO && (this.stats.glyphInventory?.combo || 0) > 0) ||
+                                   (this.selectedGlyphType === GLYPH_TYPES.CONSUMER && (this.stats.glyphInventory?.consumer || 0) > 0);
+                
+                if (hasInventory) {
+                    this.glyphMap.setGlyph(x, y, this.selectedGlyphType);
+                    // Remover del inventario
+                    if (this.selectedGlyphType === GLYPH_TYPES.COMBO) {
+                        this.stats.useGlyph('combo', 1);
+                    } else if (this.selectedGlyphType === GLYPH_TYPES.CONSUMER) {
+                        this.stats.useGlyph('consumer', 1);
+                    }
+                    this.updateUI();
+                    this.saveGameState();
+                }
+            }
+            return;
+        }
+        
         if (this.tilePlacementMode) {
             const remove = e.shiftKey === true;
             this.placeOrRemoveTileEffect(cellPosition.x, cellPosition.y, remove);
@@ -757,11 +845,22 @@ class IdleSnakeGame {
             this.basketPlaceBtn.disabled = !enabled;
             this.basketPlaceBtn.textContent = enabled ? `Cestas (${this.stats.basketInventory})` : 'Cestas';
         }
-        // Botón de Cestas
-        if (this.basketPlaceBtn) {
-            const enabled = this.stats.getHasPrestiged() && (this.stats.basketInventory > 0);
-            this.basketPlaceBtn.disabled = !enabled;
-            this.basketPlaceBtn.textContent = enabled ? `Cestas (${this.stats.basketInventory})` : 'Cestas';
+        
+        // Botón de Glifos
+        if (this.glyphPlaceBtn) {
+            const comboCount = this.stats.glyphInventory?.combo || 0;
+            const consumerCount = this.stats.glyphInventory?.consumer || 0;
+            const totalGlyphs = comboCount + consumerCount;
+            const enabled = this.stats.getHasPrestiged() && totalGlyphs > 0;
+            this.glyphPlaceBtn.disabled = !enabled;
+            this.glyphPlaceBtn.style.display = this.stats.getHasPrestiged() && this.gridSize > 10 ? 'inline-block' : 'none';
+            this.glyphPlaceBtn.textContent = enabled ? `🧬 Glifos (🔮${comboCount} ⚡${consumerCount})` : '🧬 Glifos';
+        }
+        
+        // Mostrar/ocultar controles de glifos
+        if (this.glyphTypeControls) {
+            this.glyphTypeControls.style.display = (this.isEditMode && this.glyphPlacementMode) ? 'flex' : 'none';
+            this.syncGlyphTypeRadios();
         }
     }
 
@@ -1178,6 +1277,24 @@ class IdleSnakeGame {
         if (this.tileTypeSpdRadio) {
             this.tileTypeSpdRadio.disabled = this.tileInventory.SPEED <= 0;
             this.tileTypeSpdRadio.checked = (this.tilePlacementType === TILE_EFFECTS.SPEED);
+        }
+    }
+
+    syncGlyphTypeRadios() {
+        if (!this.glyphTypeControls) return;
+        const comboCount = this.stats.glyphInventory?.combo || 0;
+        const consumerCount = this.stats.glyphInventory?.consumer || 0;
+        
+        if (this.glyphInvText) {
+            this.glyphInvText.textContent = `🔮 ${comboCount} | ⚡ ${consumerCount}`;
+        }
+        if (this.glyphTypeComboRadio) {
+            this.glyphTypeComboRadio.disabled = comboCount <= 0;
+            this.glyphTypeComboRadio.checked = (this.selectedGlyphType === GLYPH_TYPES.COMBO);
+        }
+        if (this.glyphTypeConsumerRadio) {
+            this.glyphTypeConsumerRadio.disabled = consumerCount <= 0;
+            this.glyphTypeConsumerRadio.checked = (this.selectedGlyphType === GLYPH_TYPES.CONSUMER);
         }
     }
 }

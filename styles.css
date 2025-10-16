@@ -136,6 +136,34 @@ body {
     opacity: 0.85;
 }
 
+/* Controles de glifos - similar a tile-type-controls */
+.glyph-type-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(156, 39, 176, 0.15);
+    border: 1px solid rgba(156, 39, 176, 0.4);
+    padding: 8px 12px;
+    border-radius: 14px;
+}
+
+.glyph-type-controls label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9rem;
+}
+
+.glyph-type-controls input[type="radio"] {
+    accent-color: #9c27b0;
+}
+
+.glyph-inv {
+    font-size: 0.85rem;
+    opacity: 0.85;
+    color: #e1bee7;
+}
+
 .control-btn {
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.3);
