@@ -269,6 +269,12 @@ class GameStats {
         // Cestas (post-prestigio)
         this.basketInventory = this.hasPrestiged ? 1 : 0;
         this.basketMultiplier = this.hasPrestiged ? 2 : 1;
+        
+        // Glifos de ADN (Wall 2) - Inventario de glifos colocables
+        this.glyphInventory = {
+            combo: 0,      // Glifos de Resonancia disponibles
+            consumer: 0    // Glifos Consumidores disponibles
+        };
     }
 
     // Ganar dinero ($)
@@ -337,6 +343,34 @@ class GameStats {
         return false;
     }
 
+    // Añadir glifo al inventario
+    addGlyph(type, amount = 1) {
+        if (type === 'combo') {
+            this.glyphInventory.combo = Math.min(10, this.glyphInventory.combo + amount);
+        } else if (type === 'consumer') {
+            this.glyphInventory.consumer = Math.min(10, this.glyphInventory.consumer + amount);
+        }
+    }
+
+    // Usar glifo del inventario (cuando se coloca en el tablero)
+    useGlyph(type, amount = 1) {
+        if (type === 'combo' && this.glyphInventory.combo >= amount) {
+            this.glyphInventory.combo -= amount;
+            return true;
+        } else if (type === 'consumer' && this.glyphInventory.consumer >= amount) {
+            this.glyphInventory.consumer -= amount;
+            return true;
+        }
+        return false;
+    }
+
+    // Verificar si hay glifos disponibles
+    hasGlyph(type) {
+        if (type === 'combo') return this.glyphInventory.combo > 0;
+        if (type === 'consumer') return this.glyphInventory.consumer > 0;
+        return false;
+    }
+
     // Obtener tiempo de juego total
     getTotalPlayTime() {
         return Date.now() - this.gameStartTime;
@@ -372,7 +406,8 @@ class GameStats {
             gameStartTime: this.gameStartTime,
             hasPrestiged: this.hasPrestiged,
             basketInventory: this.basketInventory,
-            basketMultiplier: this.basketMultiplier
+            basketMultiplier: this.basketMultiplier,
+            glyphInventory: this.glyphInventory
         };
         StorageUtils.save('gameStats', data);
     }
@@ -390,6 +425,10 @@ class GameStats {
             this.hasPrestiged = data.hasPrestiged || false;
             this.basketInventory = data.basketInventory ?? (this.hasPrestiged ? 1 : 0);
             this.basketMultiplier = data.basketMultiplier ?? (this.hasPrestiged ? 2 : 1);
+            this.glyphInventory = data.glyphInventory || { combo: 0, consumer: 0 };
+        } else {
+            // Inicializar inventario de glifos si no hay datos guardados
+            this.glyphInventory = { combo: 0, consumer: 0 };
         }
         this.currentRunStartTime = Date.now();
     }

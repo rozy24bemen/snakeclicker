@@ -376,6 +376,20 @@ class UpgradeManager {
                     }
                 }
                 break;
+            case 'glyph_combo':
+                // Agregar Glifo de Resonancia al inventario
+                if (typeof game !== 'undefined' && game.stats) {
+                    game.stats.addGlyph('combo', 1);
+                    Logger.log(`🔮 Glifo de Resonancia agregado al inventario (${game.stats.glyphInventory.combo}/10)`);
+                }
+                break;
+            case 'glyph_consumer':
+                // Agregar Glifo Consumidor al inventario
+                if (typeof game !== 'undefined' && game.stats) {
+                    game.stats.addGlyph('consumer', 1);
+                    Logger.log(`⚡ Glifo Consumidor agregado al inventario (${game.stats.glyphInventory.consumer}/10)`);
+                }
+                break;
         }
     }
 
@@ -641,12 +655,9 @@ class UpgradeUI {
         const comboCount = document.getElementById('glyph-combo-count');
         const consumerCount = document.getElementById('glyph-consumer-count');
         
-        if (comboCount && consumerCount) {
-            const comboLevel = this.upgradeManager?.getUpgrade?.('glyph_combo')?.currentLevel || 0;
-            const consumerLevel = this.upgradeManager?.getUpgrade?.('glyph_consumer')?.currentLevel || 0;
-            
-            comboCount.textContent = `${comboLevel}/10`;
-            consumerCount.textContent = `${consumerLevel}/10`;
+        if (comboCount && consumerCount && stats.glyphInventory) {
+            comboCount.textContent = `${stats.glyphInventory.combo}/10`;
+            consumerCount.textContent = `${stats.glyphInventory.consumer}/10`;
         }
     }
 
