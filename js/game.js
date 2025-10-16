@@ -30,6 +30,7 @@ class IdleSnakeGame {
     this.miniHud = document.getElementById('mini-hud');
     this.miniHudPc = document.getElementById('mini-hud-pc');
     this.miniHudSpd = document.getElementById('mini-hud-speed');
+    this.miniHudCombo = document.getElementById('mini-hud-combo'); // Wall 2: multiplicador glifos
 
         // Estado del juego
         this.isPaused = false;
@@ -38,6 +39,9 @@ class IdleSnakeGame {
     this.basketPlacementMode = false;
     this.glyphPlacementMode = false;         // Nuevo: modo colocación glifos
     this.selectedGlyphType = GLYPH_TYPES.COMBO; // Tipo de glifo seleccionado
+    
+    // Wall 2: Glifos de Combo - Sistema Acumulativo
+    this.currentComboMultiplier = 0.0;       // Multiplicador acumulado por serpiente en GLYPH_COMBO
     this.tilePlacementType = (typeof TILE_EFFECTS !== 'undefined' && TILE_EFFECTS.PC_MULT) ? TILE_EFFECTS.PC_MULT : 'PC_MULT';
     this.tileInventory = { PC_MULT: 0, SPEED: 0 };
     this.gameLoopId = null;
@@ -398,9 +402,29 @@ class IdleSnakeGame {
         // Reponer población de frutas si falta
         this.ensureFruitPopulation();
 
+        // Wall 2: Calcular multiplicador acumulativo por glifos
+        this.calculateComboMultiplier();
+
         // Actualizar estadísticas
         this.stats.updateCurrentLength(this.snake.length);
         this.updateUI();
+    }
+
+    // Wall 2: Calcular multiplicador acumulativo de glifos COMBO
+    calculateComboMultiplier() {
+        this.currentComboMultiplier = 0.0;
+
+        // Si no hay mapa de glifos, no calcular
+        if (!this.glyphMap) return;
+
+        // Iterar sobre todos los segmentos de la serpiente
+        for (const segment of this.snake.body) {
+            const glyph = this.glyphMap.getGlyph(segment.x, segment.y);
+            if (glyph === GLYPH_TYPES.COMBO) {
+                // Cada segmento en un glifo COMBO añade +0.5 al multiplicador
+                this.currentComboMultiplier += 0.5;
+            }
+        }
     }
 
     // Manejar muerte de la serpiente
@@ -455,6 +479,13 @@ class IdleSnakeGame {
             const gm = this.upgradeManager.getCurrentGoldenMultiplier();
             reward = Math.floor(reward * gm);
         }
+        
+        // Wall 2: Aplicar multiplicador acumulativo de glifos COMBO
+        if (this.currentComboMultiplier > 0) {
+            const comboBonus = 1 + this.currentComboMultiplier;
+            reward = Math.floor(reward * comboBonus);
+        }
+        
         this.stats.eatFruit(reward);
         if (fruit.type === 'golden') Logger.log('Golden Apple consumida');
         Logger.log(`Fruta comida (${fruit.type}). $ ganados: ${reward}`);
@@ -801,6 +832,20 @@ class IdleSnakeGame {
     // Mini-HUD texto
     if (this.miniHudPc) this.miniHudPc.textContent = `+${tileBonus} $`;
     if (this.miniHudSpd) this.miniHudSpd.textContent = `x${speedMultTile.toFixed(1)} SPD`;
+    
+    // Wall 2: Mostrar multiplicador de glifos COMBO si hay actividad
+    if (this.miniHudCombo) {
+        const comboSep = document.getElementById('mini-hud-combo-sep');
+        if (this.currentComboMultiplier > 0) {
+            const totalComboMult = 1 + this.currentComboMultiplier;
+            this.miniHudCombo.textContent = `x${totalComboMult.toFixed(1)} ◆`;
+            this.miniHudCombo.style.display = 'inline';
+            if (comboSep) comboSep.style.display = 'inline';
+        } else {
+            this.miniHudCombo.style.display = 'none';
+            if (comboSep) comboSep.style.display = 'none';
+        }
+    }
         
         // Actualizar mejoras (pasar tamaño actual del grid)
         this.upgradeUI.updateUI(this.stats, this.gridSize);
