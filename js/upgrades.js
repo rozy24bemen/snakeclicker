@@ -267,6 +267,25 @@ class UpgradeManager {
             10     // Máximo 10 glifos
         );
 
+        // Wall 3: Manzana Oscura y Glifo de Desvío - Desbloqueados tras Wall 2
+        const darkFruitUpgrade = new Upgrade(
+            'dark_fruit_unlock',
+            '🍎 Manzana Oscura',
+            'Desbloquea la aparición de Manzanas Oscuras (0.5% probabilidad). Dictador de IA con recompensa masiva.',
+            15,    // Muy costoso - requisito avanzado
+            'pureDNA',
+            1      // Solo necesitas desbloquearlo una vez
+        );
+
+        const glyphRedirectUpgrade = new Upgrade(
+            'glyph_redirect',
+            '🔄 Glifo de Desvío',
+            'Baldosa que anula la IA y fuerza dirección específica. Controla el camino hacia la Manzana Oscura. Cantidad: {level}',
+            5,     // Muy costoso - herramienta de control avanzado
+            'pureDNA',
+            8      // Máximo 8 glifos de desvío
+        );
+
         this.upgrades.set('start_speed', startSpeedUpgrade);
         this.upgrades.set('start_multiplier', startMultiplierUpgrade);
         this.upgrades.set('fusion_wall', fusionWallUpgrade);
@@ -276,6 +295,8 @@ class UpgradeManager {
         this.upgrades.set('golden_power', goldenPowerUpgrade);
         this.upgrades.set('glyph_combo', glyphComboUpgrade);
         this.upgrades.set('glyph_consumer', glyphConsumerUpgrade);
+        this.upgrades.set('dark_fruit_unlock', darkFruitUpgrade);
+        this.upgrades.set('glyph_redirect', glyphRedirectUpgrade);
     }
 
     // Obtener mejora por ID
@@ -390,6 +411,22 @@ class UpgradeManager {
                     Logger.log(`⚡ Glifo Consumidor agregado al inventario (${game.stats.glyphInventory.consumer}/10)`);
                 }
                 break;
+                
+            // Wall 3: Nuevas mejoras avanzadas
+            case 'dark_fruit_unlock':
+                // Desbloquear la aparición de Manzanas Oscuras
+                if (typeof game !== 'undefined' && game.stats) {
+                    game.stats.darkFruitUnlocked = true;
+                    Logger.log(`🍎 Manzana Oscura desbloqueada! La IA ahora será obsesionada por ella...`);
+                }
+                break;
+            case 'glyph_redirect':
+                // Agregar Glifo de Desvío al inventario
+                if (typeof game !== 'undefined' && game.stats) {
+                    game.stats.addGlyph('redirect', 1);
+                    Logger.log(`🔄 Glifo de Desvío agregado al inventario (${game.stats.glyphInventory.redirect}/8)`);
+                }
+                break;
         }
     }
 
@@ -465,6 +502,14 @@ class UpgradeManager {
                 const expansionLevel = this.getUpgrade('expansion')?.currentLevel || 0;
                 const currentGridSize = GAME_CONFIG.INITIAL_GRID_SIZE + expansionLevel;
                 return currentGridSize > 10 && stats.getHasPrestiged();
+                
+            case 'dark_fruit_unlock':
+            case 'glyph_redirect':
+                // Wall 3: Disponible solo después de tener al menos 1 glifo de Wall 2
+                const wall3ExpansionLevel = this.getUpgrade('expansion')?.currentLevel || 0;
+                const wall3GridSize = GAME_CONFIG.INITIAL_GRID_SIZE + wall3ExpansionLevel;
+                const hasWall2Glifos = (stats.glyphInventory?.combo > 0) || (stats.glyphInventory?.consumer > 0);
+                return hasWall2Glifos && stats.getHasPrestiged() && wall3GridSize > 10;
         }
 
         return true;
@@ -645,7 +690,7 @@ class UpgradeUI {
 
     // Actualizar mejoras de glifos
     updateGlyphUpgrades(stats) {
-        const upgrades = ['glyph_combo', 'glyph_consumer'];
+        const upgrades = ['glyph_combo', 'glyph_consumer', 'dark_fruit_unlock', 'glyph_redirect'];
         this.updateUpgradeContainer(this.containers.glyphs, upgrades, stats);
         this.updateGlyphInventoryDisplay(stats);
     }
@@ -654,10 +699,12 @@ class UpgradeUI {
     updateGlyphInventoryDisplay(stats) {
         const comboCount = document.getElementById('glyph-combo-count');
         const consumerCount = document.getElementById('glyph-consumer-count');
+        const redirectCount = document.getElementById('glyph-redirect-count');
         
-        if (comboCount && consumerCount && stats.glyphInventory) {
+        if (comboCount && consumerCount && redirectCount && stats.glyphInventory) {
             comboCount.textContent = `${stats.glyphInventory.combo}/10`;
             consumerCount.textContent = `${stats.glyphInventory.consumer}/10`;
+            redirectCount.textContent = `${stats.glyphInventory.redirect || 0}/8`;
         }
     }
 

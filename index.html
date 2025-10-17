@@ -44,6 +44,8 @@
                     <span id="mini-hud-speed">x1.0 SPD</span>
                     <span class="sep" id="mini-hud-combo-sep" style="display:none;">|</span>
                     <span id="mini-hud-combo" style="display:none;">x1.0 ◆</span>
+                    <span class="sep" id="mini-hud-redirect-sep" style="display:none;">|</span>
+                    <span id="mini-hud-redirect" style="display:none;">🔄 Ninguno</span>
                 </div>
                 <div class="game-controls">
                     <button id="edit-mode-btn" class="control-btn" disabled>Modo Edición</button>
@@ -59,7 +61,8 @@
                     <div class="glyph-type-controls" id="glyph-type-controls" style="display:none;">
                         <label><input type="radio" name="glyph-type" id="glyph-type-combo" value="COMBO" checked> 🔮 Combo</label>
                         <label><input type="radio" name="glyph-type" id="glyph-type-consumer" value="CONSUMER"> ⚡ Consumidor</label>
-                        <span class="glyph-inv" id="glyph-inv-text">🔮 0 | ⚡ 0</span>
+                        <label><input type="radio" name="glyph-type" id="glyph-type-redirect" value="REDIRECT"> 🔄 Desvío</label>
+                        <span class="glyph-inv" id="glyph-inv-text">🔮 0 | ⚡ 0 | 🔄 0</span>
                     </div>
                     <button id="pause-btn" class="control-btn">Pausar</button>
                 </div>
@@ -103,6 +106,10 @@
                                 <span class="label">Consumidor:</span>
                                 <span class="value" id="glyph-consumer-count">0/10</span>
                             </div>
+                            <div class="stat">
+                                <span class="label">Desvío:</span>
+                                <span class="value" id="glyph-redirect-count">0/8</span>
+                            </div>
                         </div>
                         <div id="glyph-upgrades"></div>
                     </div>
@@ -128,6 +135,7 @@
     <script src="js/tile_effects.js"></script>
     <script src="js/glyphs.js"></script>
     <script src="js/baskets.js"></script>
+    <script src="js/snake-sprites.js"></script>
     <script src="js/snake.js"></script>
     <script src="js/walls.js"></script>
     <script src="js/upgrades.js"></script>

@@ -9,9 +9,11 @@ const GAME_CONFIG = {
     MIN_SPEED: 50,
     CELL_SIZE: 30,
     COLORS: {
-        SNAKE_HEAD: '#4CAF50',
-        SNAKE_BODY: '#45a049',
+        SNAKE_HEAD: '#2196F3',      // Azul brillante para la cabeza
+        SNAKE_BODY: '#1976D2',      // Azul más oscuro para el cuerpo
         FRUIT: '#FF6B6B',
+        FRUIT_GOLDEN: '#FFD700',     // Dorada existente
+        FRUIT_DARK: '#551A8B',       // Wall 3: Manzana Oscura (púrpura oscuro)
         WALL: '#666666',
         PORTAL_A: '#9C27B0',
         PORTAL_B: '#E91E63',
@@ -26,12 +28,18 @@ const GAME_CONFIG = {
     },
     GLYPH_COLORS: {
         COMBO: '#9C27B0',        // Púrpura para resonancia
-        CONSUMER: '#E91E63'      // Rosa para consumidor
+        CONSUMER: '#E91E63',     // Rosa para consumidor
+        REDIRECT: '#FF5722'      // Wall 3: Naranja oscuro para desvío
     },
     ECONOMY: {
         PRESTIGE_MONEY_THRESHOLD: 10000,   // Threshold en $ para prestigio
         GOLDEN_FRUIT_CHANCE_BASE: 0.01,    // 1% tras prestigio
-        GOLDEN_FRUIT_MULTIPLIER_BASE: 10   // x10 tras prestigio
+        GOLDEN_FRUIT_MULTIPLIER_BASE: 10,  // x10 tras prestigio
+        
+        // Wall 3: Manzana Oscura (El Dictador) 
+        DARK_FRUIT_CHANCE_BASE: 0.005,     // 0.5% - muy rara
+        DARK_FRUIT_MONEY_REWARD: 2000,     // $2,000 - valor real viene de ADN+COMBO
+        DARK_FRUIT_DNA_REWARD: 1           // 1 ADN Puro garantizado
     }
 };
 
@@ -44,7 +52,8 @@ const TILE_EFFECTS = {
 // Tipos de glifos de ADN
 const GLYPH_TYPES = {
     COMBO: 'GLYPH_COMBO',      // Resonancia: acumula multiplicador por segmentos
-    CONSUMER: 'GLYPH_CONSUMER'  // Sacrificio: consume longitud por dinero
+    CONSUMER: 'GLYPH_CONSUMER', // Sacrificio: consume longitud por dinero
+    REDIRECT: 'GLYPH_REDIRECT'  // Wall 3: Desvío: anula IA y fuerza dirección
 };
 
 // Direcciones de movimiento

@@ -17,6 +17,7 @@ class IdleSnakeGame {
     this.glyphTypeControls = document.getElementById('glyph-type-controls');
     this.glyphTypeComboRadio = document.getElementById('glyph-type-combo');
     this.glyphTypeConsumerRadio = document.getElementById('glyph-type-consumer');
+    this.glyphTypeRedirectRadio = document.getElementById('glyph-type-redirect');
     this.glyphInvText = document.getElementById('glyph-inv-text');
         
     // Elementos de estadísticas
@@ -31,6 +32,8 @@ class IdleSnakeGame {
     this.miniHudPc = document.getElementById('mini-hud-pc');
     this.miniHudSpd = document.getElementById('mini-hud-speed');
     this.miniHudCombo = document.getElementById('mini-hud-combo'); // Wall 2: multiplicador glifos
+    this.miniHudRedirect = document.getElementById('mini-hud-redirect'); // Wall 3: dirección forzada
+    this.miniHudRedirectSep = document.getElementById('mini-hud-redirect-sep');
 
         // Estado del juego
         this.isPaused = false;
@@ -50,8 +53,19 @@ class IdleSnakeGame {
     // Prestigio
     this.prestigeReady = false;
 
+        // Texturas del tablero
+        this.grassTextures = {
+            grass1: null,
+            grass2: null,
+            loaded: false
+        };
+
+        // Sistema de sprites de serpiente
+        this.snakeSprites = new SnakeSprites();
+
         // Inicializar sistemas del juego
         this.initializeGame();
+        this.loadTextures();
         this.setupEventListeners();
         this.loadGameState();
         
@@ -92,6 +106,31 @@ class IdleSnakeGame {
         });
 
         Logger.log('Juego inicializado correctamente');
+    }
+
+    // Cargar texturas del tablero
+    loadTextures() {
+        const loadImage = (src) => {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = src;
+            });
+        };
+
+        Promise.all([
+            loadImage('assets/grass1.png'),
+            loadImage('assets/grass2.png')
+        ]).then(([grass1, grass2]) => {
+            this.grassTextures.grass1 = grass1;
+            this.grassTextures.grass2 = grass2;
+            this.grassTextures.loaded = true;
+            Logger.log('Texturas del tablero cargadas correctamente');
+        }).catch((error) => {
+            Logger.warn('Error cargando texturas del tablero:', error);
+            this.grassTextures.loaded = false;
+        });
     }
 
     // Configurar event listeners
@@ -137,15 +176,25 @@ class IdleSnakeGame {
             this.glyphPlaceBtn.addEventListener('click', () => {
                 if (!this.isEditMode) this.toggleEditMode();
                 if (!this.stats.getHasPrestiged()) return;
-                const totalGlyphs = (this.stats.glyphInventory?.combo || 0) + (this.stats.glyphInventory?.consumer || 0);
+                const totalGlyphs = (this.stats.glyphInventory?.combo || 0) + (this.stats.glyphInventory?.consumer || 0) + (this.stats.glyphInventory?.redirect || 0);
                 if (totalGlyphs <= 0) return;
                 this.glyphPlacementMode = !this.glyphPlacementMode;
                 // Al activar, seleccionar el tipo según disponibilidad
                 if (this.glyphPlacementMode) {
-                    if (this.selectedGlyphType === GLYPH_TYPES.COMBO && (this.stats.glyphInventory?.combo || 0) <= 0 && (this.stats.glyphInventory?.consumer || 0) > 0) {
-                        this.selectedGlyphType = GLYPH_TYPES.CONSUMER;
-                    } else if (this.selectedGlyphType === GLYPH_TYPES.CONSUMER && (this.stats.glyphInventory?.consumer || 0) <= 0 && (this.stats.glyphInventory?.combo || 0) > 0) {
-                        this.selectedGlyphType = GLYPH_TYPES.COMBO;
+                    const comboCount = this.stats.glyphInventory?.combo || 0;
+                    const consumerCount = this.stats.glyphInventory?.consumer || 0;
+                    const redirectCount = this.stats.glyphInventory?.redirect || 0;
+                    
+                    // Si el tipo seleccionado no está disponible, buscar uno disponible
+                    if (this.selectedGlyphType === GLYPH_TYPES.COMBO && comboCount <= 0) {
+                        if (consumerCount > 0) this.selectedGlyphType = GLYPH_TYPES.CONSUMER;
+                        else if (redirectCount > 0) this.selectedGlyphType = GLYPH_TYPES.REDIRECT;
+                    } else if (this.selectedGlyphType === GLYPH_TYPES.CONSUMER && consumerCount <= 0) {
+                        if (comboCount > 0) this.selectedGlyphType = GLYPH_TYPES.COMBO;
+                        else if (redirectCount > 0) this.selectedGlyphType = GLYPH_TYPES.REDIRECT;
+                    } else if (this.selectedGlyphType === GLYPH_TYPES.REDIRECT && redirectCount <= 0) {
+                        if (comboCount > 0) this.selectedGlyphType = GLYPH_TYPES.COMBO;
+                        else if (consumerCount > 0) this.selectedGlyphType = GLYPH_TYPES.CONSUMER;
                     }
                 }
                 this.syncGlyphTypeRadios();
@@ -177,6 +226,12 @@ class IdleSnakeGame {
         if (this.glyphTypeConsumerRadio) {
             this.glyphTypeConsumerRadio.addEventListener('change', () => {
                 if (this.glyphTypeConsumerRadio.checked) this.selectedGlyphType = GLYPH_TYPES.CONSUMER;
+                this.updateUI();
+            });
+        }
+        if (this.glyphTypeRedirectRadio) {
+            this.glyphTypeRedirectRadio.addEventListener('change', () => {
+                if (this.glyphTypeRedirectRadio.checked) this.selectedGlyphType = GLYPH_TYPES.REDIRECT;
                 this.updateUI();
             });
         }
@@ -244,13 +299,15 @@ class IdleSnakeGame {
             
             if (removing) {
                 // Remover glifo y devolver al inventario
-                const glyphType = this.glyphMap.getGlyph(x, y);
+                const glyphType = this.glyphMap.getGlyphType(x, y);
                 if (glyphType) {
                     this.glyphMap.removeGlyph(x, y);
                     if (glyphType === GLYPH_TYPES.COMBO) {
                         this.stats.addGlyph('combo', 1);
                     } else if (glyphType === GLYPH_TYPES.CONSUMER) {
                         this.stats.addGlyph('consumer', 1);
+                    } else if (glyphType === GLYPH_TYPES.REDIRECT) {
+                        this.stats.addGlyph('redirect', 1);
                     }
                     this.updateUI();
                     this.saveGameState();
@@ -265,18 +322,24 @@ class IdleSnakeGame {
                 !this.basketMap.isBasket(x, y)) {
                 
                 const hasInventory = (this.selectedGlyphType === GLYPH_TYPES.COMBO && (this.stats.glyphInventory?.combo || 0) > 0) ||
-                                   (this.selectedGlyphType === GLYPH_TYPES.CONSUMER && (this.stats.glyphInventory?.consumer || 0) > 0);
+                                   (this.selectedGlyphType === GLYPH_TYPES.CONSUMER && (this.stats.glyphInventory?.consumer || 0) > 0) ||
+                                   (this.selectedGlyphType === GLYPH_TYPES.REDIRECT && (this.stats.glyphInventory?.redirect || 0) > 0);
                 
                 if (hasInventory) {
-                    this.glyphMap.setGlyph(x, y, this.selectedGlyphType);
-                    // Remover del inventario
-                    if (this.selectedGlyphType === GLYPH_TYPES.COMBO) {
-                        this.stats.useGlyph('combo', 1);
-                    } else if (this.selectedGlyphType === GLYPH_TYPES.CONSUMER) {
-                        this.stats.useGlyph('consumer', 1);
+                    // Caso especial: Glifo de Desvío requiere selección de dirección
+                    if (this.selectedGlyphType === GLYPH_TYPES.REDIRECT) {
+                        this.promptDirectionSelection(x, y);
+                    } else {
+                        this.glyphMap.setGlyph(x, y, this.selectedGlyphType);
+                        // Remover del inventario
+                        if (this.selectedGlyphType === GLYPH_TYPES.COMBO) {
+                            this.stats.useGlyph('combo', 1);
+                        } else if (this.selectedGlyphType === GLYPH_TYPES.CONSUMER) {
+                            this.stats.useGlyph('consumer', 1);
+                        }
+                        this.updateUI();
+                        this.saveGameState();
                     }
-                    this.updateUI();
-                    this.saveGameState();
                 }
             }
             return;
@@ -343,6 +406,11 @@ class IdleSnakeGame {
             this.lastUpdateTime = currentTime;
         }
 
+        // Actualizar animación de sprites
+        if (this.snakeSprites) {
+            this.snakeSprites.update(deltaTime);
+        }
+
         this.render();
         this.gameLoopId = requestAnimationFrame((time) => this.gameLoop(time));
     }
@@ -351,17 +419,31 @@ class IdleSnakeGame {
     update() {
         if (!this.snake.isSnakeAlive()) return;
 
-        // Obtener dirección de la IA
-        const targetFruit = this.chooseTargetFruit();
-        const aiDirection = this.pathfindingAI.getNextDirection(
-            this.snake,
-            targetFruit,
-            this.wallManager.walls,
-            this.gridSize
-        );
+        // Wall 3: Verificar Glifo de Desvío (anula la IA)
+        let finalDirection = null;
+        const head = this.snake.getHead();
+        if (head && this.glyphMap) {
+            const redirectDirection = this.checkRedirectGlyphOverride(head.x, head.y);
+            if (redirectDirection) {
+                finalDirection = redirectDirection;
+                // Logger.log(`🔄 Glifo de Desvío anulando IA - Dirección forzada: ${JSON.stringify(redirectDirection)}`);
+            }
+        }
 
-        if (aiDirection) {
-            this.snake.setDirection(aiDirection);
+        // Si no hay override de glifo, usar IA normal
+        if (!finalDirection) {
+            const targetFruit = this.chooseTargetFruit();
+            const aiDirection = this.pathfindingAI.getNextDirection(
+                this.snake,
+                targetFruit,
+                this.wallManager.walls,
+                this.gridSize
+            );
+            finalDirection = aiDirection;
+        }
+
+        if (finalDirection) {
+            this.snake.setDirection(finalDirection);
         }
 
         // Mover serpiente
@@ -423,8 +505,8 @@ class IdleSnakeGame {
 
         // Iterar sobre todos los segmentos de la serpiente
         for (const segment of this.snake.body) {
-            const glyph = this.glyphMap.getGlyph(segment.x, segment.y);
-            if (glyph === GLYPH_TYPES.COMBO) {
+            const glyphType = this.glyphMap.getGlyphType(segment.x, segment.y);
+            if (glyphType === GLYPH_TYPES.COMBO) {
                 // Cada segmento en un glifo COMBO añade +0.5 al multiplicador
                 this.currentComboMultiplier += 0.5;
             }
@@ -441,8 +523,8 @@ class IdleSnakeGame {
         if (!head) return;
 
         // Verificar si hay un glifo CONSUMER en la posición de la cabeza
-        const glyph = this.glyphMap.getGlyph(head.x, head.y);
-        if (glyph === GLYPH_TYPES.CONSUMER) {
+        const glyphType = this.glyphMap.getGlyphType(head.x, head.y);
+        if (glyphType === GLYPH_TYPES.CONSUMER) {
             this.activateGlyphConsumer();
         }
     }
@@ -461,6 +543,81 @@ class IdleSnakeGame {
         
         // Log del evento para debug
         Logger.log(`Glifo CONSUMER activado: -1 longitud, +$${rewardAmount}`);
+    }
+
+    // Wall 3: Verificar si hay Glifo de Desvío que anule la IA
+    checkRedirectGlyphOverride(x, y) {
+        if (!this.glyphMap) return null;
+        
+        // Verificar si hay un glifo REDIRECT en la posición actual
+        const glyphType = this.glyphMap.getGlyphType(x, y);
+        if (glyphType === GLYPH_TYPES.REDIRECT) {
+            // Obtener la dirección forzada del glifo
+            const redirectDirection = this.glyphMap.getGlyphDirection(x, y);
+            if (redirectDirection) {
+                return redirectDirection;
+            }
+        }
+        
+        return null; // No hay override de dirección
+    }
+
+    // Wall 3: Convertir dirección en nombre legible para UI
+    getDirectionName(direction) {
+        if (!direction) return 'Ninguno';
+        
+        if (direction.x === 0 && direction.y === -1) return 'Norte ⬆️';
+        if (direction.x === 0 && direction.y === 1) return 'Sur ⬇️';
+        if (direction.x === 1 && direction.y === 0) return 'Este ➡️';
+        if (direction.x === -1 && direction.y === 0) return 'Oeste ⬅️';
+        
+        return 'Desconocido';
+    }
+
+    // Wall 3: Renderizar flecha de dirección forzada sobre la cabeza
+    renderRedirectArrow(head, direction) {
+        const canvasPos = CanvasUtils.getCanvasFromCell(
+            head.x,
+            head.y,
+            GAME_CONFIG.CELL_SIZE
+        );
+        
+        const centerX = canvasPos.x + GAME_CONFIG.CELL_SIZE / 2;
+        const centerY = canvasPos.y + GAME_CONFIG.CELL_SIZE / 2;
+        
+        // Animación sutil con pulsación
+        const time = Date.now() / 1000;
+        const pulse = 0.8 + 0.2 * Math.sin(time * 4); // pulsación entre 0.8 y 1.0
+        const arrowSize = 12 * pulse;
+        
+        this.ctx.save();
+        this.ctx.translate(centerX, centerY);
+        
+        // Calcular ángulo de rotación según dirección
+        let angle = 0;
+        if (direction.x === 0 && direction.y === -1) angle = -Math.PI / 2; // Norte
+        else if (direction.x === 0 && direction.y === 1) angle = Math.PI / 2; // Sur  
+        else if (direction.x === 1 && direction.y === 0) angle = 0; // Este
+        else if (direction.x === -1 && direction.y === 0) angle = Math.PI; // Oeste
+        
+        this.ctx.rotate(angle);
+        
+        // Dibujar flecha
+        this.ctx.fillStyle = '#FF5722'; // Color naranja del glifo redirect
+        this.ctx.strokeStyle = '#ffffff';
+        this.ctx.lineWidth = 2;
+        
+        this.ctx.beginPath();
+        this.ctx.moveTo(arrowSize, 0);
+        this.ctx.lineTo(-arrowSize/2, -arrowSize/2);
+        this.ctx.lineTo(-arrowSize/4, 0);
+        this.ctx.lineTo(-arrowSize/2, arrowSize/2);
+        this.ctx.closePath();
+        
+        this.ctx.fill();
+        this.ctx.stroke();
+        
+        this.ctx.restore();
     }
 
     // Wall 2: Mostrar notificación visual del sacrificio
@@ -599,6 +756,12 @@ class IdleSnakeGame {
             reward = Math.floor(reward * gm);
         }
         
+        // Wall 3: Manzana Oscura - recompensa masiva base 
+        if (fruit.type === 'dark') {
+            // Sobrescriba todo cálculo anterior con recompensa masiva base
+            reward = fruit.getRewardBase(baseMult);
+        }
+        
         // Wall 2: Aplicar multiplicador acumulativo de glifos COMBO
         if (this.currentComboMultiplier > 0) {
             const comboBonus = 1 + this.currentComboMultiplier;
@@ -607,10 +770,20 @@ class IdleSnakeGame {
         
         this.stats.eatFruit(reward);
         
+        // Wall 3: Otorgar ADN Puro si es manzana oscura
+        if (fruit.type === 'dark') {
+            const dnaReward = fruit.getDNAReward();
+            if (dnaReward > 0) {
+                this.stats.addPureDNA(dnaReward);
+                Logger.log(`🍎 MANZANA OSCURA: +${dnaReward} ADN Puro otorgado!`);
+            }
+        }
+        
         // Mostrar animación de números flotantes
         this.showFloatingNumber(reward, pos);
         
         if (fruit.type === 'golden') Logger.log('Golden Apple consumida');
+        if (fruit.type === 'dark') Logger.log('🍎 MANZANA OSCURA CONSUMIDA - Recompensa masiva aplicada!');
         Logger.log(`Fruta comida (${fruit.type}). $ ganados: ${reward}`);
     }
 
@@ -621,26 +794,41 @@ class IdleSnakeGame {
         const extra = cultivo ? cultivo.currentLevel : 0;
         const desired = 1 + extra; // base 1
         
-        // FIX: Prevenir bucle infinito con límite de intentos
-        let failedAttempts = 0;
-        const maxFailedAttempts = 3; // Máximo 3 intentos consecutivos fallidos
+        // FIX: Mejorar lógica de múltiples frutas
+        let totalAttempts = 0;
+        const maxTotalAttempts = desired * 10; // 10 intentos por fruta deseada
         
-        while (this.fruits.length < desired && failedAttempts < maxFailedAttempts) {
+        while (this.fruits.length < desired && totalAttempts < maxTotalAttempts) {
             const fruit = this.createFruit();
             if (fruit) {
                 this.fruits.push(fruit);
-                failedAttempts = 0; // Reset contador en éxito
+                Logger.log(`Fruta ${this.fruits.length}/${desired} generada exitosamente`);
             } else {
-                failedAttempts++;
-                Logger.warn(`No se pudo generar fruta. Intento ${failedAttempts}/${maxFailedAttempts}`);
+                // Si no se pudo crear fruta, intentar fruta forzada
+                Logger.warn(`Intento ${totalAttempts + 1}: createFruit() falló, intentando fruta forzada...`);
+                const forcedFruit = this.createForcedFruit();
+                if (forcedFruit) {
+                    this.fruits.push(forcedFruit);
+                    Logger.log(`Fruta forzada ${this.fruits.length}/${desired} generada exitosamente`);
+                } else {
+                    Logger.warn(`No se pudo generar ni fruta normal ni forzada en intento ${totalAttempts + 1}`);
+                }
             }
+            totalAttempts++;
         }
         
-        // Si no se pudo generar frutas, es posible que el tablero esté muy lleno
-        if (failedAttempts >= maxFailedAttempts && this.fruits.length === 0) {
-            Logger.error('Tablero demasiado lleno para generar frutas. Considerando reset automático...');
-            // En caso extremo, generar al menos una fruta forzada o reiniciar
-            this.handleGridOverflow();
+        // Log del resultado final
+        const achieved = this.fruits.length;
+        if (achieved < desired) {
+            Logger.warn(`Solo se pudieron generar ${achieved}/${desired} frutas tras ${totalAttempts} intentos`);
+            
+            // Si no se pudo generar ninguna fruta, verificar overflow
+            if (achieved === 0) {
+                Logger.error('No se pudo generar ninguna fruta. Verificando overflow del tablero...');
+                this.handleGridOverflow();
+            }
+        } else {
+            Logger.log(`Población de frutas completa: ${achieved}/${desired} frutas generadas`);
         }
     }
 
@@ -649,12 +837,15 @@ class IdleSnakeGame {
         const maxAttempts = Math.max(100, this.gridSize * 10);
         let attempts = 0; 
         
+        Logger.log(`[createFruit] Intentando crear fruta. Máximo ${maxAttempts} intentos`);
+        
         while (attempts < maxAttempts) {
             const f = new Fruit(this.gridSize);
             
             // FIX: Verificar si la fruta se creó con posición válida
             if (!f.valid) {
                 attempts++;
+                Logger.warn(`[createFruit] Intento ${attempts}: Fruit constructor falló (f.valid=false)`);
                 continue; // La fruta no se pudo posicionar, tablero lleno
             }
             
@@ -662,6 +853,15 @@ class IdleSnakeGame {
             if (this.stats.getHasPrestiged()) {
                 const goldenChance = this.upgradeManager.getCurrentGoldenChance();
                 if (Math.random() < goldenChance) f.setType('golden');
+            }
+            
+            // Wall 3: Manzanas Oscuras solo si están desbloqueadas
+            if (this.stats.darkFruitUnlocked && this.stats.getHasPrestiged()) {
+                const darkChance = GAME_CONFIG.ECONOMY?.DARK_FRUIT_CHANCE_BASE ?? 0.005;
+                if (Math.random() < darkChance) {
+                    f.setType('dark');
+                    Logger.log('🍎 ¡MANZANA OSCURA GENERADA! La IA será obsesionada...');
+                }
             }
             const exclude = [
                 ...this.snake.getOccupiedPositions(),
@@ -688,11 +888,12 @@ class IdleSnakeGame {
             }
             // Validar repulsión
             if (!this.wallManager.checkFruitRepulsion || !this.wallManager.checkFruitRepulsion(f)) {
+                Logger.log(`[createFruit] Fruta creada exitosamente en intento ${attempts + 1}`);
                 return f;
             }
             attempts++;
         }
-        Logger.warn('No se pudo generar nueva fruta multi-intento');
+        Logger.warn(`[createFruit] No se pudo generar nueva fruta tras ${maxAttempts} intentos`);
         return null;
     }
 
@@ -751,7 +952,10 @@ class IdleSnakeGame {
         // Crear fruta en posición aleatoria libre
         const randomPos = freePositions[Math.floor(Math.random() * freePositions.length)];
         const fruit = new Fruit(this.gridSize);
+        
+        // Forzar la posición específica y marcar como válida
         fruit.position = randomPos;
+        fruit.valid = true; // Forzar validez ya que sabemos que la posición es libre
         
         Logger.log(`Fruta forzada creada en (${randomPos.x}, ${randomPos.y})`);
         return fruit;
@@ -762,9 +966,8 @@ class IdleSnakeGame {
         // Limpiar canvas
         CanvasUtils.clear(this.ctx, this.canvas.width, this.canvas.height);
         
-        // Dibujar fondo
-        this.ctx.fillStyle = GAME_CONFIG.COLORS.BACKGROUND;
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        // Dibujar fondo de tablero de ajedrez con texturas
+        this.renderChessboardBackground();
         
         // Dibujar cuadrícula
         CanvasUtils.drawGrid(this.ctx, this.gridSize, GAME_CONFIG.CELL_SIZE);
@@ -792,6 +995,48 @@ class IdleSnakeGame {
 
         // Actualizar y posicionar Mini-HUD cerca de la cabeza
         this.updateMiniHUDPositionAndValues();
+    }
+
+    // Renderizar fondo de tablero de ajedrez con texturas
+    renderChessboardBackground() {
+        if (this.grassTextures.loaded) {
+            // Usar texturas cargadas para el patrón de ajedrez
+            for (let y = 0; y < this.gridSize; y++) {
+                for (let x = 0; x < this.gridSize; x++) {
+                    const canvasPos = CanvasUtils.getCanvasFromCell(x, y, GAME_CONFIG.CELL_SIZE);
+                    
+                    // Patrón de ajedrez: alternar entre grass1 y grass2
+                    const isEven = (x + y) % 2 === 0;
+                    const texture = isEven ? this.grassTextures.grass1 : this.grassTextures.grass2;
+                    
+                    this.ctx.drawImage(
+                        texture,
+                        canvasPos.x,
+                        canvasPos.y,
+                        GAME_CONFIG.CELL_SIZE,
+                        GAME_CONFIG.CELL_SIZE
+                    );
+                }
+            }
+        } else {
+            // Fallback: colores sólidos si las texturas no están cargadas
+            for (let y = 0; y < this.gridSize; y++) {
+                for (let x = 0; x < this.gridSize; x++) {
+                    const canvasPos = CanvasUtils.getCanvasFromCell(x, y, GAME_CONFIG.CELL_SIZE);
+                    
+                    // Patrón de ajedrez con colores
+                    const isEven = (x + y) % 2 === 0;
+                    this.ctx.fillStyle = isEven ? '#4CAF50' : '#45A049'; // Verdes alternos
+                    
+                    this.ctx.fillRect(
+                        canvasPos.x,
+                        canvasPos.y,
+                        GAME_CONFIG.CELL_SIZE,
+                        GAME_CONFIG.CELL_SIZE
+                    );
+                }
+            }
+        }
     }
 
     // Renderizar muros
@@ -925,6 +1170,78 @@ class IdleSnakeGame {
 
     // Renderizar serpiente
     renderSnake() {
+        if (!this.snakeSprites || !this.snakeSprites.loaded) {
+            // Fallback al renderizado antiguo si los sprites no están listos
+            this.renderSnakeFallback();
+            return;
+        }
+
+        const animationOffset = this.snakeSprites.getAnimationOffset();
+        
+        this.snake.body.forEach((segment, index) => {
+            const canvasPos = CanvasUtils.getCanvasFromCell(
+                segment.x,
+                segment.y,
+                GAME_CONFIG.CELL_SIZE
+            );
+            
+            // Añadir pequeño offset de animación para movimiento fluido
+            const renderX = canvasPos.x + (Math.sin(Date.now() / 1000 + index * 0.5) * 1);
+            const renderY = canvasPos.y + (Math.cos(Date.now() / 1000 + index * 0.5) * 0.5);
+            
+            let sprite = null;
+            
+            if (index === 0) {
+                // Cabeza - obtener sprite direccional
+                const direction = this.snake.getCurrentDirection();
+                sprite = this.snakeSprites.getHeadSprite(direction);
+            } else if (index === this.snake.body.length - 1) {
+                // Cola - obtener sprite direccional
+                const prevSegment = this.snake.body[index - 1];
+                sprite = this.snakeSprites.getTailSprite(segment, prevSegment);
+            } else {
+                // Cuerpo - determinar tipo de segmento
+                const prevSegment = this.snake.body[index - 1];
+                const nextSegment = this.snake.body[index + 1];
+                sprite = this.snakeSprites.getBodySprite(prevSegment, segment, nextSegment);
+            }
+            
+            if (sprite) {
+                this.ctx.drawImage(sprite, renderX, renderY);
+            }
+        });
+
+        // Efecto visual para boost
+        if (this.snake.isBoostActive()) {
+            const head = this.snake.getHead();
+            const canvasPos = CanvasUtils.getCanvasFromCell(
+                head.x,
+                head.y,
+                GAME_CONFIG.CELL_SIZE
+            );
+            
+            CanvasUtils.drawCircle(
+                this.ctx,
+                canvasPos.x + GAME_CONFIG.CELL_SIZE / 2,
+                canvasPos.y + GAME_CONFIG.CELL_SIZE / 2,
+                GAME_CONFIG.CELL_SIZE / 2 + 5,
+                null,
+                '#FFC107'
+            );
+        }
+
+        // Wall 3: Efecto visual para Glifo de Desvío activo
+        const head = this.snake.getHead();
+        if (head && this.glyphMap) {
+            const redirectDirection = this.checkRedirectGlyphOverride(head.x, head.y);
+            if (redirectDirection) {
+                this.renderRedirectArrow(head, redirectDirection);
+            }
+        }
+    }
+
+    // Renderizado fallback para serpiente (sin sprites)
+    renderSnakeFallback() {
         this.snake.body.forEach((segment, index) => {
             const canvasPos = CanvasUtils.getCanvasFromCell(
                 segment.x,
@@ -947,25 +1264,6 @@ class IdleSnakeGame {
                 color
             );
         });
-
-        // Efecto visual para boost
-        if (this.snake.isBoostActive()) {
-            const head = this.snake.getHead();
-            const canvasPos = CanvasUtils.getCanvasFromCell(
-                head.x,
-                head.y,
-                GAME_CONFIG.CELL_SIZE
-            );
-            
-            CanvasUtils.drawCircle(
-                this.ctx,
-                canvasPos.x + GAME_CONFIG.CELL_SIZE / 2,
-                canvasPos.y + GAME_CONFIG.CELL_SIZE / 2,
-                GAME_CONFIG.CELL_SIZE / 2 + 5,
-                null,
-                '#FFC107'
-            );
-        }
     }
 
     // Renderizar overlay del modo edición
@@ -1060,6 +1358,26 @@ class IdleSnakeGame {
         } else {
             this.miniHudCombo.style.display = 'none';
             if (comboSep) comboSep.style.display = 'none';
+        }
+    }
+
+    // Wall 3: Mostrar dirección forzada próximo tick
+    if (this.miniHudRedirect && this.miniHudRedirectSep) {
+        const head = this.snake.getHead();
+        if (head && this.glyphMap) {
+            const redirectDirection = this.checkRedirectGlyphOverride(head.x, head.y);
+            if (redirectDirection) {
+                const dirName = this.getDirectionName(redirectDirection);
+                this.miniHudRedirect.textContent = `🔄 ${dirName}`;
+                this.miniHudRedirect.style.display = 'inline';
+                this.miniHudRedirectSep.style.display = 'inline';
+            } else {
+                this.miniHudRedirect.style.display = 'none';
+                this.miniHudRedirectSep.style.display = 'none';
+            }
+        } else {
+            this.miniHudRedirect.style.display = 'none';
+            this.miniHudRedirectSep.style.display = 'none';
         }
     }
         
@@ -1487,11 +1805,21 @@ class IdleSnakeGame {
         };
     }
 
-    // Seleccionar fruta objetivo para la IA: prioridad golden; si no hay, la más cercana por Manhattan
+    // Seleccionar fruta objetivo para la IA: Wall 3 - MANZANA OSCURA es DICTADOR absoluto
     chooseTargetFruit() {
         if (!this.fruits || this.fruits.length === 0) return { position: this.snake.getHead() }; // fallback
+        
+        // Wall 3: 🍎 MANZANA OSCURA = PRIORIDAD ABSOLUTA (El Dictador)
+        const darkApple = this.fruits.find(f => f.type === 'dark');
+        if (darkApple) {
+            Logger.log('🍎 IA FORZADA: Manzana Oscura detectada - PRIORIDAD ABSOLUTA activada');
+            return darkApple;
+        }
+        
+        // Prioridad normal: Dorada > Cercana
         const golden = this.fruits.find(f => f.type === 'golden');
         if (golden) return golden;
+        
         const head = this.snake.getHead();
         let best = null; let bestDist = Infinity;
         for (const f of this.fruits) {
@@ -1558,9 +1886,10 @@ class IdleSnakeGame {
         if (!this.glyphTypeControls) return;
         const comboCount = this.stats.glyphInventory?.combo || 0;
         const consumerCount = this.stats.glyphInventory?.consumer || 0;
+        const redirectCount = this.stats.glyphInventory?.redirect || 0;
         
         if (this.glyphInvText) {
-            this.glyphInvText.textContent = `🔮 ${comboCount} | ⚡ ${consumerCount}`;
+            this.glyphInvText.textContent = `🔮 ${comboCount} | ⚡ ${consumerCount} | 🔄 ${redirectCount}`;
         }
         if (this.glyphTypeComboRadio) {
             this.glyphTypeComboRadio.disabled = comboCount <= 0;
@@ -1570,6 +1899,39 @@ class IdleSnakeGame {
             this.glyphTypeConsumerRadio.disabled = consumerCount <= 0;
             this.glyphTypeConsumerRadio.checked = (this.selectedGlyphType === GLYPH_TYPES.CONSUMER);
         }
+        if (this.glyphTypeRedirectRadio) {
+            this.glyphTypeRedirectRadio.disabled = redirectCount <= 0;
+            this.glyphTypeRedirectRadio.checked = (this.selectedGlyphType === GLYPH_TYPES.REDIRECT);
+        }
+    }
+
+    // Prompts para selección de dirección al colocar Glifo de Desvío
+    promptDirectionSelection(x, y) {
+        const directions = [
+            { key: 'N', name: 'Norte ⬆️', value: { x: 0, y: -1 } },
+            { key: 'S', name: 'Sur ⬇️', value: { x: 0, y: 1 } },
+            { key: 'E', name: 'Este ➡️', value: { x: 1, y: 0 } },
+            { key: 'O', name: 'Oeste ⬅️', value: { x: -1, y: 0 } }
+        ];
+        
+        let message = "🔄 Glifo de Desvío - Selecciona dirección forzada:\n\n";
+        directions.forEach(dir => {
+            message += `${dir.key} - ${dir.name}\n`;
+        });
+        message += "\nEscribe la letra (N, S, E, O):";
+        
+        const choice = prompt(message)?.toUpperCase().trim();
+        const selectedDir = directions.find(d => d.key === choice);
+        
+        if (selectedDir) {
+            // Colocar glifo con dirección
+            this.glyphMap.setGlyph(x, y, GLYPH_TYPES.REDIRECT, selectedDir.value);
+            this.stats.useGlyph('redirect', 1);
+            this.updateUI();
+            this.saveGameState();
+            Logger.log(`🔄 Glifo de Desvío colocado en (${x},${y}) - Dirección: ${selectedDir.name}`);
+        }
+        // Si cancela o entrada inválida, no se coloca el glifo
     }
 }
 

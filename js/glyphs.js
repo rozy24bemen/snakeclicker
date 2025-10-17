@@ -43,9 +43,19 @@ class GlyphMap {
     }
 
     // Colocar un glifo en una posición
-    setGlyph(x, y, glyphType) {
+    setGlyph(x, y, glyphType, direction = null) {
         if (!MathUtils.isValidPosition({ x, y }, this.gridSize)) return false;
-        this.map[y][x] = glyphType;
+        
+        // Para glifos redirect, almacenar tipo y dirección
+        if (glyphType === GLYPH_TYPES.REDIRECT && direction) {
+            this.map[y][x] = {
+                type: glyphType,
+                direction: direction
+            };
+        } else {
+            // Para otros glifos, solo el tipo (compatibilidad hacia atrás)
+            this.map[y][x] = glyphType;
+        }
         return true;
     }
 
@@ -55,6 +65,27 @@ class GlyphMap {
         return this.map[y][x];
     }
 
+    // Obtener solo el tipo de glifo (compatibilidad hacia atrás)
+    getGlyphType(x, y) {
+        const glyph = this.getGlyph(x, y);
+        if (!glyph) return null;
+        // Si es un objeto (glifo redirect), devolver el tipo
+        if (typeof glyph === 'object' && glyph.type) {
+            return glyph.type;
+        }
+        // Si es string (glifos antiguos), devolver directamente
+        return glyph;
+    }
+
+    // Obtener la dirección de un glifo redirect
+    getGlyphDirection(x, y) {
+        const glyph = this.getGlyph(x, y);
+        if (glyph && typeof glyph === 'object' && glyph.direction) {
+            return glyph.direction;
+        }
+        return null;
+    }
+
     // Verificar si hay un glifo en una posición
     hasGlyph(x, y) {
         return this.getGlyph(x, y) !== null;
@@ -62,7 +93,7 @@ class GlyphMap {
 
     // Verificar si hay un glifo específico en una posición
     hasGlyphType(x, y, glyphType) {
-        return this.getGlyph(x, y) === glyphType;
+        return this.getGlyphType(x, y) === glyphType;
     }
 
     // Remover un glifo de una posición

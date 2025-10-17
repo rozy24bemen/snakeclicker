@@ -105,6 +105,11 @@ class Snake {
         return this.boostActive;
     }
 
+    // Obtener la dirección actual para sprites
+    getCurrentDirection() {
+        return this.direction;
+    }
+
     // Actualizar el tamaño de la cuadrícula
     updateGridSize(newGridSize) {
         this.gridSize = newGridSize;
@@ -183,7 +188,7 @@ class Fruit {
     constructor(gridSize) {
         this.gridSize = gridSize;
         this.position = { x: 0, y: 0 };
-        this.type = 'normal'; // 'normal' | 'golden'
+        this.type = 'normal'; // 'normal' | 'golden' | 'dark'
         this.valid = this.generateNewPosition(); // Almacenar si la posición es válida
     }
 
@@ -205,14 +210,30 @@ class Fruit {
     }
 
     getColor() {
-        if (this.type === 'golden') return '#FFD700';
+        if (this.type === 'golden') return GAME_CONFIG.COLORS.FRUIT_GOLDEN;
+        if (this.type === 'dark') return GAME_CONFIG.COLORS.FRUIT_DARK;
         return GAME_CONFIG.COLORS.FRUIT;
     }
 
     getRewardBase(multiplier) {
         // Golden otorga bono plano además del multiplicador normal
-        const bonus = (typeof GAME_CONFIG !== 'undefined' && GAME_CONFIG.ECONOMY) ? GAME_CONFIG.ECONOMY.GOLDEN_FRUIT_BONUS_PC : 50;
-        return (multiplier) + (this.type === 'golden' ? bonus : 0);
+        const goldenBonus = (typeof GAME_CONFIG !== 'undefined' && GAME_CONFIG.ECONOMY) ? GAME_CONFIG.ECONOMY.GOLDEN_FRUIT_BONUS_PC : 50;
+        
+        // Wall 3: Dark otorga recompensa masiva base
+        if (this.type === 'dark') {
+            const darkReward = (typeof GAME_CONFIG !== 'undefined' && GAME_CONFIG.ECONOMY) ? GAME_CONFIG.ECONOMY.DARK_FRUIT_MONEY_REWARD : 2000;
+            return darkReward; // Recompensa fija masiva, luego se aplicarán multiplicadores
+        }
+        
+        return (multiplier) + (this.type === 'golden' ? goldenBonus : 0);
+    }
+
+    // Wall 3: Verificar si otorga recompensa de ADN Puro
+    getDNAReward() {
+        if (this.type === 'dark') {
+            return (typeof GAME_CONFIG !== 'undefined' && GAME_CONFIG.ECONOMY) ? GAME_CONFIG.ECONOMY.DARK_FRUIT_DNA_REWARD : 1;
+        }
+        return 0; // Solo manzanas oscuras otorgan ADN Puro directo
     }
 
     // Verificar si la fruta está en una posición específica
@@ -277,10 +298,11 @@ class GameStats {
         this.basketInventory = this.hasPrestiged ? 1 : 0;
         this.basketMultiplier = this.hasPrestiged ? 2 : 1;
         
-        // Glifos de ADN (Wall 2) - Inventario de glifos colocables
+        // Glifos de ADN (Wall 2 y 3) - Inventario de glifos colocables
         this.glyphInventory = {
             combo: 0,      // Glifos de Resonancia disponibles
-            consumer: 0    // Glifos Consumidores disponibles
+            consumer: 0,   // Glifos Consumidores disponibles
+            redirect: 0    // Glifos de Desvío disponibles (Wall 3)
         };
     }
 
@@ -356,6 +378,8 @@ class GameStats {
             this.glyphInventory.combo = Math.min(10, this.glyphInventory.combo + amount);
         } else if (type === 'consumer') {
             this.glyphInventory.consumer = Math.min(10, this.glyphInventory.consumer + amount);
+        } else if (type === 'redirect') {
+            this.glyphInventory.redirect = Math.min(8, this.glyphInventory.redirect + amount);
         }
     }
 
@@ -367,6 +391,9 @@ class GameStats {
         } else if (type === 'consumer' && this.glyphInventory.consumer >= amount) {
             this.glyphInventory.consumer -= amount;
             return true;
+        } else if (type === 'redirect' && this.glyphInventory.redirect >= amount) {
+            this.glyphInventory.redirect -= amount;
+            return true;
         }
         return false;
     }
@@ -375,6 +402,7 @@ class GameStats {
     hasGlyph(type) {
         if (type === 'combo') return this.glyphInventory.combo > 0;
         if (type === 'consumer') return this.glyphInventory.consumer > 0;
+        if (type === 'redirect') return this.glyphInventory.redirect > 0;
         return false;
     }
 
@@ -414,7 +442,8 @@ class GameStats {
             hasPrestiged: this.hasPrestiged,
             basketInventory: this.basketInventory,
             basketMultiplier: this.basketMultiplier,
-            glyphInventory: this.glyphInventory
+            glyphInventory: this.glyphInventory,
+            darkFruitUnlocked: this.darkFruitUnlocked
         };
         StorageUtils.save('gameStats', data);
     }
@@ -432,10 +461,12 @@ class GameStats {
             this.hasPrestiged = data.hasPrestiged || false;
             this.basketInventory = data.basketInventory ?? (this.hasPrestiged ? 1 : 0);
             this.basketMultiplier = data.basketMultiplier ?? (this.hasPrestiged ? 2 : 1);
-            this.glyphInventory = data.glyphInventory || { combo: 0, consumer: 0 };
+            this.glyphInventory = data.glyphInventory || { combo: 0, consumer: 0, redirect: 0 };
+            this.darkFruitUnlocked = data.darkFruitUnlocked || false;
         } else {
             // Inicializar inventario de glifos si no hay datos guardados
-            this.glyphInventory = { combo: 0, consumer: 0 };
+            this.glyphInventory = { combo: 0, consumer: 0, redirect: 0 };
+            this.darkFruitUnlocked = false;
         }
         this.currentRunStartTime = Date.now();
     }
