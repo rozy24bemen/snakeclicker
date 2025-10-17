@@ -997,20 +997,17 @@ class IdleSnakeGame {
         this.updateMiniHUDPositionAndValues();
     }
 
-    // Renderizar fondo de tablero de ajedrez con texturas
+    // Renderizar fondo de tablero uniforme con grass1
     renderChessboardBackground() {
         if (this.grassTextures.loaded) {
-            // Usar texturas cargadas para el patrón de ajedrez
+            // Usar solo grass1 para todo el tablero
             for (let y = 0; y < this.gridSize; y++) {
                 for (let x = 0; x < this.gridSize; x++) {
                     const canvasPos = CanvasUtils.getCanvasFromCell(x, y, GAME_CONFIG.CELL_SIZE);
                     
-                    // Patrón de ajedrez: alternar entre grass1 y grass2
-                    const isEven = (x + y) % 2 === 0;
-                    const texture = isEven ? this.grassTextures.grass1 : this.grassTextures.grass2;
-                    
+                    // Solo grass1 para todo el tablero
                     this.ctx.drawImage(
-                        texture,
+                        this.grassTextures.grass1,
                         canvasPos.x,
                         canvasPos.y,
                         GAME_CONFIG.CELL_SIZE,
@@ -1019,23 +1016,9 @@ class IdleSnakeGame {
                 }
             }
         } else {
-            // Fallback: colores sólidos si las texturas no están cargadas
-            for (let y = 0; y < this.gridSize; y++) {
-                for (let x = 0; x < this.gridSize; x++) {
-                    const canvasPos = CanvasUtils.getCanvasFromCell(x, y, GAME_CONFIG.CELL_SIZE);
-                    
-                    // Patrón de ajedrez con colores
-                    const isEven = (x + y) % 2 === 0;
-                    this.ctx.fillStyle = isEven ? '#4CAF50' : '#45A049'; // Verdes alternos
-                    
-                    this.ctx.fillRect(
-                        canvasPos.x,
-                        canvasPos.y,
-                        GAME_CONFIG.CELL_SIZE,
-                        GAME_CONFIG.CELL_SIZE
-                    );
-                }
-            }
+            // Fallback: color verde uniforme si las texturas no están cargadas
+            this.ctx.fillStyle = '#4CAF50'; // Verde uniforme
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         }
     }
 

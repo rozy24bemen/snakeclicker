@@ -45,25 +45,25 @@ class SnakeSprites {
         const size = GAME_CONFIG.CELL_SIZE;
         const center = size / 2;
         
-        // Base de la cabeza con gradiente sofisticado
+        // Base de la cabeza con gradiente sofisticado en blanco
         const baseGradient = ctx.createRadialGradient(center-2, center-2, 0, center, center, center-3);
-        baseGradient.addColorStop(0, '#4FC3F7'); // Azul claro brillante
-        baseGradient.addColorStop(0.5, GAME_CONFIG.COLORS.SNAKE_HEAD);
-        baseGradient.addColorStop(1, '#0D47A1'); // Azul muy oscuro
+        baseGradient.addColorStop(0, '#FFFFFF'); // Blanco puro brillante
+        baseGradient.addColorStop(0.5, '#F5F5F5'); // Blanco ligeramente grisáceo
+        baseGradient.addColorStop(1, '#E0E0E0'); // Gris claro para el borde
         
         ctx.fillStyle = baseGradient;
         ctx.beginPath();
         ctx.arc(center, center, center - 3, 0, Math.PI * 2);
         ctx.fill();
         
-        // Borde brillante
-        ctx.strokeStyle = '#1E88E5';
+        // Borde gris sutil
+        ctx.strokeStyle = '#BDBDBD';
         ctx.lineWidth = 1.5;
         ctx.stroke();
         
         // Brillo superior más sutil
         const highlight = ctx.createRadialGradient(center - 4, center - 4, 0, center, center, center/2);
-        highlight.addColorStop(0, 'rgba(255,255,255,0.6)');
+        highlight.addColorStop(0, 'rgba(255,255,255,0.8)');
         highlight.addColorStop(1, 'rgba(255,255,255,0)');
         ctx.fillStyle = highlight;
         ctx.beginPath();
@@ -82,14 +82,15 @@ class SnakeSprites {
         let eyeOffset = 5;
         let pupilOffset = 1.5;
         
-        // Ojos más grandes y brillantes
-        ctx.fillStyle = '#ffffff';
-        ctx.strokeStyle = '#1976D2';
+        // Ojos más grandes y brillantes con mejor contraste
+        ctx.fillStyle = '#000000'; // Fondo negro para mejor contraste
+        ctx.strokeStyle = '#757575'; // Gris medio
         ctx.lineWidth = 0.5;
         
         switch(direction) {
             case 'up':
-                // Ojos arriba - más grandes y expresivos
+                // Ojos arriba - fondo blanco con borde gris
+                ctx.fillStyle = '#FFFFFF';
                 ctx.beginPath();
                 ctx.arc(center - 4, center - eyeOffset, 3.5, 0, Math.PI * 2);
                 ctx.fill();
@@ -99,7 +100,7 @@ class SnakeSprites {
                 ctx.fill();
                 ctx.stroke();
                 
-                // Pupilas brillantes
+                // Pupilas negras
                 ctx.fillStyle = '#000000';
                 ctx.beginPath();
                 ctx.arc(center - 4, center - eyeOffset - pupilOffset, 2, 0, Math.PI * 2);
@@ -115,8 +116,8 @@ class SnakeSprites {
                 break;
                 
             case 'down':
-                // Ojos abajo - mejorados
-                ctx.fillStyle = '#ffffff';
+                // Ojos abajo - fondo blanco con borde gris
+                ctx.fillStyle = '#FFFFFF';
                 ctx.beginPath();
                 ctx.arc(center - 4, center + eyeOffset, 3.5, 0, Math.PI * 2);
                 ctx.fill();
@@ -140,8 +141,8 @@ class SnakeSprites {
                 break;
                 
             case 'left':
-                // Ojos izquierda - mejorados
-                ctx.fillStyle = '#ffffff';
+                // Ojos izquierda - fondo blanco con borde gris
+                ctx.fillStyle = '#FFFFFF';
                 ctx.beginPath();
                 ctx.arc(center - eyeOffset, center - 4, 3.5, 0, Math.PI * 2);
                 ctx.fill();
@@ -165,8 +166,8 @@ class SnakeSprites {
                 break;
                 
             case 'right':
-                // Ojos derecha - mejorados
-                ctx.fillStyle = '#ffffff';
+                // Ojos derecha - fondo blanco con borde gris
+                ctx.fillStyle = '#FFFFFF';
                 ctx.beginPath();
                 ctx.arc(center + eyeOffset, center - 4, 3.5, 0, Math.PI * 2);
                 ctx.fill();
@@ -205,21 +206,21 @@ class SnakeSprites {
         
         switch(type) {
             case 'horizontal':
-                // Segmento horizontal elegante con gradiente sutil
+                // Segmento horizontal elegante con gradiente blanco
                 const gradient1 = ctx.createLinearGradient(0, 0, 0, size);
-                gradient1.addColorStop(0, GAME_CONFIG.COLORS.SNAKE_HEAD);
-                gradient1.addColorStop(0.5, GAME_CONFIG.COLORS.SNAKE_BODY);
-                gradient1.addColorStop(1, GAME_CONFIG.COLORS.SNAKE_HEAD);
+                gradient1.addColorStop(0, '#E0E0E0'); // Gris claro
+                gradient1.addColorStop(0.5, GAME_CONFIG.COLORS.SNAKE_BODY); // Blanco del cuerpo
+                gradient1.addColorStop(1, '#E0E0E0'); // Gris claro
                 ctx.fillStyle = gradient1;
                 this.drawRoundedRect(ctx, 1, size/4, size-2, size/2, 8);
                 break;
                 
             case 'vertical':
-                // Segmento vertical elegante con gradiente sutil  
+                // Segmento vertical elegante con gradiente blanco  
                 const gradient2 = ctx.createLinearGradient(0, 0, size, 0);
-                gradient2.addColorStop(0, GAME_CONFIG.COLORS.SNAKE_HEAD);
-                gradient2.addColorStop(0.5, GAME_CONFIG.COLORS.SNAKE_BODY);
-                gradient2.addColorStop(1, GAME_CONFIG.COLORS.SNAKE_HEAD);
+                gradient2.addColorStop(0, '#E0E0E0'); // Gris claro
+                gradient2.addColorStop(0.5, GAME_CONFIG.COLORS.SNAKE_BODY); // Blanco del cuerpo
+                gradient2.addColorStop(1, '#E0E0E0'); // Gris claro
                 ctx.fillStyle = gradient2;
                 this.drawRoundedRect(ctx, size/4, 1, size/2, size-2, 8);
                 break;
@@ -320,15 +321,15 @@ class SnakeSprites {
 
     // Obtener sprite de cabeza según dirección
     getHeadSprite(direction) {
-        const dirMap = {
-            [DIRECTIONS.UP]: 'up',
-            [DIRECTIONS.DOWN]: 'down',
-            [DIRECTIONS.LEFT]: 'left',
-            [DIRECTIONS.RIGHT]: 'right'
-        };
+        // Comparar las propiedades del objeto dirección
+        if (direction.x === 0 && direction.y === -1) return this.spriteConfig.head.up;    // UP
+        if (direction.x === 0 && direction.y === 1) return this.spriteConfig.head.down;   // DOWN
+        if (direction.x === -1 && direction.y === 0) return this.spriteConfig.head.left;  // LEFT
+        if (direction.x === 1 && direction.y === 0) return this.spriteConfig.head.right;  // RIGHT
         
-        const dirStr = dirMap[direction] || 'right';
-        return this.spriteConfig.head[dirStr];
+        // Fallback
+        console.log('Dirección no reconocida:', direction);
+        return this.spriteConfig.head.right;
     }
 
     // Determinar tipo de segmento del cuerpo

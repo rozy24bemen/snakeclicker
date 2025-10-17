@@ -9,8 +9,8 @@ const GAME_CONFIG = {
     MIN_SPEED: 50,
     CELL_SIZE: 30,
     COLORS: {
-        SNAKE_HEAD: '#2196F3',      // Azul brillante para la cabeza
-        SNAKE_BODY: '#1976D2',      // Azul más oscuro para el cuerpo
+        SNAKE_HEAD: '#FFFFFF',      // Blanco puro para la cabeza
+        SNAKE_BODY: '#F5F5F5',      // Blanco ligeramente grisáceo para el cuerpo
         FRUIT: '#FF6B6B',
         FRUIT_GOLDEN: '#FFD700',     // Dorada existente
         FRUIT_DARK: '#551A8B',       // Wall 3: Manzana Oscura (púrpura oscuro)
