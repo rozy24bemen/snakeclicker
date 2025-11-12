@@ -129,6 +129,18 @@ body {
     margin: 0 6px;
 }
 
+/* Mini-HUD combo pulse animation */
+#mini-hud-combo.mini-hud-combo-pulse {
+    animation: hudComboPulse 380ms ease-out;
+    text-shadow: 0 0 10px rgba(136, 249, 255, 0.8), 0 0 18px rgba(79, 232, 255, 0.6);
+}
+
+@keyframes hudComboPulse {
+    0% { transform: scale(1); }
+    20% { transform: scale(1.18); }
+    100% { transform: scale(1); }
+}
+
 .game-controls {
     margin-top: 15px;
     display: flex;

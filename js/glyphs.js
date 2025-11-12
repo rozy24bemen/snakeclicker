@@ -234,8 +234,18 @@ class GlyphMap {
             ctx.strokeText('C', centerX, centerY + 1);
             ctx.fillText('C', centerX, centerY + 1);
         } else if (actualType === GLYPH_TYPES.REDIRECT) {
-            // Flecha con brillo direccional (usa direction si existe)
+            // Flecha con brillo y rotación según dirección almacenada
             const glow = (Math.sin(t * 3.2) * 0.5 + 0.5);
+            // Obtener dirección si el glifo es objeto {type, direction}
+            let angle = 0;
+            if (glyphType && typeof glyphType === 'object' && glyphType.direction) {
+                const d = glyphType.direction;
+                if (d.x === 0 && d.y === -1) angle = -Math.PI/2;
+                else if (d.x === 0 && d.y === 1) angle = Math.PI/2;
+                else if (d.x === -1 && d.y === 0) angle = Math.PI;
+                else angle = 0; // Este por defecto
+            }
+
             ctx.save();
             ctx.globalCompositeOperation = 'lighter';
             const g = ctx.createRadialGradient(centerX, centerY, baseR * 0.3, centerX, centerY, baseR * 1.25);
@@ -246,14 +256,25 @@ class GlyphMap {
             ctx.arc(centerX, centerY, baseR * 1.28, 0, Math.PI * 2);
             ctx.fill();
             ctx.restore();
-            const arrow = '→';
+
+            // Arrow vectorial rotada
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate(angle);
+            const pulse = 0.9 + 0.1 * Math.sin(t * 4);
+            const a = baseR * pulse;
             ctx.fillStyle = '#F7E9FF';
-            ctx.font = `${cellSize * 0.34}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.shadowColor = '#D756FF';
-            ctx.shadowBlur = 10 + glow * 12;
-            ctx.fillText(arrow, centerX, centerY + 1);
+            ctx.strokeStyle = '#D756FF';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(a, 0);
+            ctx.lineTo(-a*0.5, -a*0.5);
+            ctx.lineTo(-a*0.2, 0);
+            ctx.lineTo(-a*0.5, a*0.5);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
         } else {
             // Fallback: círculo simple
             ctx.fillStyle = '#666';

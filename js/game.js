@@ -589,6 +589,7 @@ class IdleSnakeGame {
         const time = Date.now() / 1000;
         const pulse = 0.8 + 0.2 * Math.sin(time * 4); // pulsación entre 0.8 y 1.0
         const arrowSize = 12 * pulse;
+        const glow = (Math.sin(time * 3.2) * 0.5 + 0.5);
         
         this.ctx.save();
         this.ctx.translate(centerX, centerY);
@@ -602,18 +603,28 @@ class IdleSnakeGame {
         
         this.ctx.rotate(angle);
         
-        // Dibujar flecha
-        this.ctx.fillStyle = '#FF5722'; // Color naranja del glifo redirect
-        this.ctx.strokeStyle = '#ffffff';
+        // Glow radial ligero
+        this.ctx.save();
+        this.ctx.globalCompositeOperation = 'lighter';
+        const grad = this.ctx.createRadialGradient(0,0,arrowSize*0.3,0,0,arrowSize*1.6);
+        grad.addColorStop(0, `rgba(255,120,50,${0.45 + glow*0.25})`);
+        grad.addColorStop(1, 'rgba(200,50,0,0)');
+        this.ctx.fillStyle = grad;
+        this.ctx.beginPath();
+        this.ctx.arc(0,0,arrowSize*1.6,0,Math.PI*2);
+        this.ctx.fill();
+        this.ctx.restore();
+
+        // Dibujar flecha direccional
+        this.ctx.fillStyle = '#FF6A2A';
+        this.ctx.strokeStyle = '#FFFFFF';
         this.ctx.lineWidth = 2;
-        
         this.ctx.beginPath();
         this.ctx.moveTo(arrowSize, 0);
-        this.ctx.lineTo(-arrowSize/2, -arrowSize/2);
-        this.ctx.lineTo(-arrowSize/4, 0);
-        this.ctx.lineTo(-arrowSize/2, arrowSize/2);
+        this.ctx.lineTo(-arrowSize*0.55, -arrowSize*0.55);
+        this.ctx.lineTo(-arrowSize*0.25, 0);
+        this.ctx.lineTo(-arrowSize*0.55, arrowSize*0.55);
         this.ctx.closePath();
-        
         this.ctx.fill();
         this.ctx.stroke();
         
@@ -776,6 +787,8 @@ class IdleSnakeGame {
             if (dnaReward > 0) {
                 this.stats.addPureDNA(dnaReward);
                 Logger.log(`🍎 MANZANA OSCURA: +${dnaReward} ADN Puro otorgado!`);
+                // Shockwave visual: registrar animación
+                this.triggerDarkFruitShockwave(fruit.position);
             }
         }
         
@@ -785,6 +798,88 @@ class IdleSnakeGame {
         if (fruit.type === 'golden') Logger.log('Golden Apple consumida');
         if (fruit.type === 'dark') Logger.log('🍎 MANZANA OSCURA CONSUMIDA - Recompensa masiva aplicada!');
         Logger.log(`Fruta comida (${fruit.type}). $ ganados: ${reward}`);
+    }
+
+    // Shockwave procedimental tras consumir Manzana Oscura
+    triggerDarkFruitShockwave(position) {
+        if (!this.darkFruitShockwaves) this.darkFruitShockwaves = [];
+        // Generar partículas únicas para este shockwave
+        const particleCount = 28;
+        const particles = [];
+        for (let i = 0; i < particleCount; i++) {
+            particles.push({
+                angle: (Math.PI * 2) * (i / particleCount) + Math.random() * 0.25,
+                maxDist: (this.gridSize * GAME_CONFIG.CELL_SIZE * 0.35) + Math.random() * 40,
+                size: 3 + Math.random() * 2,
+                lifespan: 450 + Math.random() * 250
+            });
+        }
+        this.darkFruitShockwaves.push({
+            x: position.x,
+            y: position.y,
+            start: Date.now(),
+            particles
+        });
+    }
+
+    renderDarkFruitShockwaves() {
+        if (!this.darkFruitShockwaves || this.darkFruitShockwaves.length === 0) return;
+        const now = Date.now();
+        const cell = GAME_CONFIG.CELL_SIZE;
+        const duration = 1000; // ms
+        this.darkFruitShockwaves = this.darkFruitShockwaves.filter(sw => now - sw.start < duration);
+        this.darkFruitShockwaves.forEach(sw => {
+            const t = (now - sw.start) / duration; // 0..1
+            const ease = AnimationUtils.easeOut(t);
+            const maxR = this.gridSize * cell * 0.95; // cubrir casi todo tablero
+            const radius = ease * maxR;
+            const baseAlpha = (1 - t) * 0.35; // desvanecer
+            const cx = sw.x * cell + cell / 2;
+            const cy = sw.y * cell + cell / 2;
+
+            this.ctx.save();
+            this.ctx.globalCompositeOperation = 'lighter';
+
+            // Disco suave base
+            const grad = this.ctx.createRadialGradient(cx, cy, radius * 0.35, cx, cy, radius);
+            grad.addColorStop(0, `rgba(170,90,255,${baseAlpha})`);
+            grad.addColorStop(0.6, `rgba(120,40,200,${baseAlpha * 0.35})`);
+            grad.addColorStop(1, 'rgba(80,20,140,0)');
+            this.ctx.beginPath();
+            this.ctx.fillStyle = grad;
+            this.ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            this.ctx.fill();
+
+            // Anillos concéntricos (ripple rings)
+            const rings = 3;
+            for (let i = 1; i <= rings; i++) {
+                const ringR = radius * (0.45 + i * 0.18);
+                if (ringR <= 0) continue;
+                this.ctx.lineWidth = 2 + (3 - i);
+                this.ctx.strokeStyle = `rgba(190,120,255,${baseAlpha * (0.6 - i*0.15)})`;
+                this.ctx.beginPath();
+                this.ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+                this.ctx.stroke();
+            }
+
+            // Partículas (sparks) radiales
+            if (sw.particles && sw.particles.length) {
+                sw.particles.forEach(p => {
+                    const pt = Math.min(1, (now - sw.start) / p.lifespan);
+                    if (pt <= 0 || pt > 1) return;
+                    const prog = AnimationUtils.easeOut(pt);
+                    const px = cx + Math.cos(p.angle) * p.maxDist * prog;
+                    const py = cy + Math.sin(p.angle) * p.maxDist * prog;
+                    const palpha = (1 - pt) * 0.85;
+                    this.ctx.fillStyle = `rgba(242,230,255,${palpha})`;
+                    this.ctx.beginPath();
+                    this.ctx.arc(px, py, p.size * (1 - pt * 0.6), 0, Math.PI * 2);
+                    this.ctx.fill();
+                });
+            }
+
+            this.ctx.restore();
+        });
     }
 
     // Generar nueva fruta
@@ -987,6 +1082,9 @@ class IdleSnakeGame {
         
         // Dibujar serpiente
         this.renderSnake();
+
+    // Shockwaves de Manzana Oscura (sobre todo)
+    this.renderDarkFruitShockwaves();
         
         // Dibujar overlay para modo edición
         if (this.isEditMode) {
@@ -1416,16 +1514,25 @@ class IdleSnakeGame {
     // Wall 2: Mostrar multiplicador de glifos COMBO si hay actividad
     if (this.miniHudCombo) {
         const comboSep = document.getElementById('mini-hud-combo-sep');
+        const prevComboDisplay = this._lastComboDisplayValue || 0;
         if (this.currentComboMultiplier > 0) {
             const totalComboMult = 1 + this.currentComboMultiplier;
             this.miniHudCombo.textContent = `x${totalComboMult.toFixed(1)} ◆`;
             this.miniHudCombo.style.display = 'inline';
             if (comboSep) comboSep.style.display = 'inline';
+            // Bounce/glow si cambia valor
+            if (totalComboMult !== prevComboDisplay) {
+                this.triggerMiniHudComboPulse();
+                this._lastComboDisplayValue = totalComboMult;
+            }
         } else {
             this.miniHudCombo.style.display = 'none';
             if (comboSep) comboSep.style.display = 'none';
+            this._lastComboDisplayValue = 0;
         }
     }
+
+    
 
     // Wall 3: Mostrar dirección forzada próximo tick
     if (this.miniHudRedirect && this.miniHudRedirectSep) {
@@ -1435,6 +1542,8 @@ class IdleSnakeGame {
             if (redirectDirection) {
                 const dirName = this.getDirectionName(redirectDirection);
                 this.miniHudRedirect.textContent = `🔄 ${dirName}`;
+                // Color destacado estilo manzana oscura
+                this.miniHudRedirect.style.color = '#AA66EE';
                 this.miniHudRedirect.style.display = 'inline';
                 this.miniHudRedirectSep.style.display = 'inline';
             } else {
@@ -2004,4 +2113,17 @@ class IdleSnakeGame {
 // Exportar si se usa en módulos
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { IdleSnakeGame };
+}
+
+// Definir método fuera de la clase para evitar conflictos de alcance en ediciones previas
+if (typeof IdleSnakeGame !== 'undefined') {
+    IdleSnakeGame.prototype.triggerMiniHudComboPulse = function () {
+        if (!this.miniHudCombo) return;
+        this.miniHudCombo.classList.remove('mini-hud-combo-pulse'); // reset
+        void this.miniHudCombo.offsetWidth; // reflow para reiniciar animación
+        this.miniHudCombo.classList.add('mini-hud-combo-pulse');
+        setTimeout(() => {
+            if (this.miniHudCombo) this.miniHudCombo.classList.remove('mini-hud-combo-pulse');
+        }, 450);
+    };
 }
