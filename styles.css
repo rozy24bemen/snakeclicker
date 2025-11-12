@@ -13,6 +13,12 @@ body {
     overflow-x: hidden;
 }
 
+/* Asegurar que el contenedor del juego esté por encima */
+.game-container {
+    position: relative;
+    z-index: 10;
+}
+
 /* Contenedor principal */
 .game-container {
     max-width: 1400px;
@@ -72,13 +78,32 @@ body {
     align-items: center;
 }
 
+/* 🌿 Soft Grass Background Canvas */
+.grass-background {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -10;
+    pointer-events: none;
+    opacity: 0; /* Start hidden */
+    transition: opacity 0.5s ease-in-out;
+}
+
+.grass-background.loaded {
+    opacity: 1; /* Show when ready */
+}
+
 /* Canvas del juego */
 #game-canvas {
-    background: #000000;
+    background: rgba(0, 0, 0, 0.7); /* Semi-transparent to show grass */
     border: 3px solid #ffffff;
     border-radius: 10px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
     cursor: crosshair;
+    position: relative;
+    z-index: 1;
 }
 
 /* Mini-HUD flotante cerca de la cabeza */

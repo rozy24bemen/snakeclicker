@@ -277,6 +277,80 @@ const CanvasUtils = {
     }
 };
 
+// Utilidades de color (HSL/Hex) para renderizado procedural
+const ColorUtils = {
+    // Convertir HSL a RGB
+    hslToRgb: (h, s, l) => {
+        h = (h % 360 + 360) % 360; // normalizar
+        s = Math.min(Math.max(s, 0), 1);
+        l = Math.min(Math.max(l, 0), 1);
+        const c = (1 - Math.abs(2 * l - 1)) * s;
+        const hp = h / 60;
+        const x = c * (1 - Math.abs((hp % 2) - 1));
+        let r = 0, g = 0, b = 0;
+        if (hp >= 0 && hp < 1) { r = c; g = x; }
+        else if (hp < 2) { r = x; g = c; }
+        else if (hp < 3) { g = c; b = x; }
+        else if (hp < 4) { g = x; b = c; }
+        else if (hp < 5) { r = x; b = c; }
+        else { r = c; b = x; }
+        const m = l - c / 2;
+        r = Math.round((r + m) * 255);
+        g = Math.round((g + m) * 255);
+        b = Math.round((b + m) * 255);
+        return { r, g, b };
+    },
+    rgbToHex: ({ r, g, b }) => '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join(''),
+    hslToHex: (h, s, l) => {
+        return ColorUtils.rgbToHex(ColorUtils.hslToRgb(h, s, l));
+    },
+    adjustL: (hex, delta) => {
+        // Ajustar luminancia simple convirtiendo a HSL aproximado
+        const rgb = ColorUtils.hexToRgb(hex);
+        if (!rgb) return hex;
+        let { h, s, l } = ColorUtils.rgbToHsl(rgb.r, rgb.g, rgb.b);
+        l = Math.min(Math.max(l + delta, 0), 1);
+        return ColorUtils.hslToHex(h, s, l);
+    },
+    hexToRgb: (hex) => {
+        const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        if (!m) return null;
+        return { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) };
+    },
+    rgbToHsl: (r, g, b) => {
+        r /= 255; g /= 255; b /= 255;
+        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        let h, s; const l = (max + min) / 2;
+        if (max === min) { h = s = 0; }
+        else {
+            const d = max - min;
+            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+            switch (max) {
+                case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                case g: h = (b - r) / d + 2; break;
+                case b: h = (r - g) / d + 4; break;
+            }
+            h *= 60;
+        }
+        return { h, s, l };
+    }
+};
+
+// Configuración visual procedural para serpiente
+const PROC_VISUAL_CONFIG = {
+    SNAKE_BASE_H: 140,          // Verde cítrico base (H)
+    SNAKE_BASE_S: 0.75,         // Saturación
+    SNAKE_BASE_L: 0.65,         // Luminosidad base
+    SIZE_DECAY_FACTOR: 0.0025,  // Escalado por segmento
+    LUMINANCE_DECAY: 0.25 / 100, // L decay por índice (convertido a 0-1)
+    MIN_SIZE_RATIO: 0.35,       // No reducir más allá de esto
+    GLOW_DURATION_MS: 1200,     // Duración del glow combo
+    GLOW_EXTRA_L: 0.12,         // Extra luminosidad en glow
+    COMBO_RING_COLOR: '#9C27B0',
+    CONSUMER_FLASH_COLOR: '#FF1744',
+    REDIRECT_ARROW_COLOR: '#FF5722'
+};
+
 // Utilidades de animación
 const AnimationUtils = {
     // Interpolación lineal

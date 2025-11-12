@@ -6,8 +6,12 @@ class SnakeSprites {
         this.animationFrame = 0;
         this.animationSpeed = 0.1;
         this.loaded = false;
+        this.useSpritesheetMode = false;
         
-        // Configuración de sprites
+        // Inicializar el gestor de spritesheet
+        this.spritesheetManager = new SpritesheetManager();
+        
+        // Configuración de sprites generados (fallback)
         this.spriteConfig = {
             head: {
                 up: this.createHeadSprite('up'),
@@ -33,6 +37,15 @@ class SnakeSprites {
         
         this.loaded = true;
         Logger.log('Sistema de sprites de serpiente inicializado');
+        
+        // Verificar periódicamente si el spritesheet está listo
+        this.checkSpritesheetInterval = setInterval(() => {
+            if (this.spritesheetManager.loaded && !this.useSpritesheetMode) {
+                this.useSpritesheetMode = true;
+                Logger.log('Cambiando a modo spritesheet');
+                clearInterval(this.checkSpritesheetInterval);
+            }
+        }, 100);
     }
 
     // Crear sprite para cabeza direccional
@@ -321,6 +334,13 @@ class SnakeSprites {
 
     // Obtener sprite de cabeza según dirección
     getHeadSprite(direction) {
+        // Si el spritesheet está disponible, úsalo
+        if (this.isUsingSpritesheetMode()) {
+            const canvas = this.spritesheetManager.createSpriteCanvas('head', direction);
+            if (canvas) return canvas;
+        }
+        
+        // Fallback a sprites generados
         // Comparar las propiedades del objeto dirección
         if (direction.x === 0 && direction.y === -1) return this.spriteConfig.head.up;    // UP
         if (direction.x === 0 && direction.y === 1) return this.spriteConfig.head.down;   // DOWN
@@ -328,46 +348,73 @@ class SnakeSprites {
         if (direction.x === 1 && direction.y === 0) return this.spriteConfig.head.right;  // RIGHT
         
         // Fallback
-        console.log('Dirección no reconocida:', direction);
+        Logger.log('Dirección no reconocida:', direction);
         return this.spriteConfig.head.right;
     }
 
     // Determinar tipo de segmento del cuerpo
     getBodySprite(prevSegment, currentSegment, nextSegment) {
-        if (!prevSegment || !nextSegment) {
-            return this.spriteConfig.body.horizontal; // Fallback
+        let bodyType = 'horizontal'; // Default
+        
+        if (prevSegment && nextSegment) {
+            // Vectores de dirección
+            const dx1 = prevSegment.x - currentSegment.x;  // Dirección hacia el segmento anterior
+            const dy1 = prevSegment.y - currentSegment.y;
+            const dx2 = nextSegment.x - currentSegment.x;  // Dirección hacia el siguiente segmento
+            const dy2 = nextSegment.y - currentSegment.y;
+
+            // Si es una línea recta (ambas direcciones están alineadas)
+            if ((dx1 === -dx2 && dy1 === -dy2)) {
+                if (dx1 === 0) bodyType = 'vertical';   // Movimiento vertical
+                else bodyType = 'horizontal'; // Movimiento horizontal
+            } else {
+                // Es una esquina - determinar qué tipo
+                bodyType = 'cornerTL'; // Simplificado por ahora
+            }
+        }
+        
+        // Si el spritesheet está disponible, úsalo
+        if (this.isUsingSpritesheetMode()) {
+            const canvas = this.spritesheetManager.createSpriteCanvas('body', bodyType);
+            if (canvas) return canvas;
         }
 
-        // Vectores de dirección
-        const dx1 = prevSegment.x - currentSegment.x;  // Dirección hacia el segmento anterior
-        const dy1 = prevSegment.y - currentSegment.y;
-        const dx2 = nextSegment.x - currentSegment.x;  // Dirección hacia el siguiente segmento
-        const dy2 = nextSegment.y - currentSegment.y;
-
-        // Si es una línea recta (ambas direcciones están alineadas)
-        if ((dx1 === -dx2 && dy1 === -dy2)) {
-            if (dx1 === 0) return this.spriteConfig.body.vertical;   // Movimiento vertical
-            else return this.spriteConfig.body.horizontal; // Movimiento horizontal
+        // Fallback a sprites generados
+        switch(bodyType) {
+            case 'vertical': return this.spriteConfig.body.vertical;
+            case 'horizontal': return this.spriteConfig.body.horizontal;
+            default: return this.spriteConfig.body.cornerTL; // Sprite universal para esquinas
         }
-
-        // Es una esquina - usar un sprite universal bonito
-        // Como todas las esquinas ahora son círculos suaves, cualquier tipo funciona bien
-        return this.spriteConfig.body.cornerTL; // Sprite universal para todas las esquinas
     }
 
     // Obtener sprite de cola según dirección
     getTailSprite(tailSegment, prevSegment) {
-        if (!prevSegment) return this.spriteConfig.tail.right;
+        let tailDirection = 'right'; // Default
         
-        const dx = tailSegment.x - prevSegment.x;
-        const dy = tailSegment.y - prevSegment.y;
+        if (prevSegment && tailSegment) {
+            const dx = tailSegment.x - prevSegment.x;
+            const dy = tailSegment.y - prevSegment.y;
+            
+            if (dx === 1) tailDirection = 'right';
+            else if (dx === -1) tailDirection = 'left';
+            else if (dy === 1) tailDirection = 'down';
+            else if (dy === -1) tailDirection = 'up';
+        }
         
-        if (dx === 1) return this.spriteConfig.tail.right;
-        if (dx === -1) return this.spriteConfig.tail.left;
-        if (dy === 1) return this.spriteConfig.tail.down;
-        if (dy === -1) return this.spriteConfig.tail.up;
+        // Si el spritesheet está disponible, úsalo
+        if (this.isUsingSpritesheetMode()) {
+            const canvas = this.spritesheetManager.createSpriteCanvas('tail', tailDirection);
+            if (canvas) return canvas;
+        }
         
-        return this.spriteConfig.tail.right; // Fallback
+        // Fallback a sprites generados
+        switch(tailDirection) {
+            case 'up': return this.spriteConfig.tail.up;
+            case 'down': return this.spriteConfig.tail.down;
+            case 'left': return this.spriteConfig.tail.left;
+            case 'right': return this.spriteConfig.tail.right;
+            default: return this.spriteConfig.tail.right;
+        }
     }
 
     // Actualizar animación
@@ -376,11 +423,92 @@ class SnakeSprites {
         if (this.animationFrame > Math.PI * 2) {
             this.animationFrame = 0;
         }
+        
+        // Actualizar también el spritesheet manager
+        if (this.spritesheetManager) {
+            this.spritesheetManager.update(deltaTime);
+        }
     }
 
     // Obtener offset de animación para movimiento fluido
     getAnimationOffset() {
         return Math.sin(this.animationFrame) * 2; // Suave ondulación
+    }
+
+    // Métodos para manejar el spritesheet
+    isUsingSpritesheetMode() {
+        return this.useSpritesheetMode && this.spritesheetManager && this.spritesheetManager.loaded;
+    }
+
+    // Cambiar tipo de serpiente (0, 1, 2)
+    setSnakeType(type) {
+        if (this.spritesheetManager) {
+            this.spritesheetManager.setSnakeType(type);
+        }
+    }
+
+    // Ciclar al siguiente tipo de serpiente
+    cycleSnakeType() {
+        if (this.spritesheetManager) {
+            this.spritesheetManager.cycleSnakeType();
+            Logger.log('Cambiado a serpiente tipo:', this.spritesheetManager.currentSnakeType);
+        }
+    }
+
+    // Obtener sprite de spritesheet o fallback
+    getSprite(partType, direction) {
+        if (this.isUsingSpritesheetMode()) {
+            // Usar spritesheet
+            const canvas = this.spritesheetManager.createSpriteCanvas(partType, direction);
+            if (canvas) return canvas;
+        }
+        
+        // Fallback a sprites generados
+        switch (partType) {
+            case 'head':
+                return this.getHeadSprite(direction);
+            case 'body':
+                return this.spriteConfig.body.horizontal; // Simplificado para demo
+            case 'tail':
+                return this.getTailSprite(null, {x: 0, y: 0}); // Simplificado
+            default:
+                return this.spriteConfig.body.horizontal;
+        }
+    }
+
+    // Métodos mejorados que usan el spritesheet cuando está disponible
+    getHeadSpriteEnhanced(direction) {
+        return this.getSprite('head', direction);
+    }
+
+    getBodySpriteEnhanced(bodyType = 'horizontal') {
+        return this.getSprite('body', bodyType);
+    }
+
+    getTailSpriteEnhanced(direction) {
+        return this.getSprite('tail', direction);
+    }
+
+    // Obtener información del sistema
+    getInfo() {
+        return {
+            loaded: this.loaded,
+            useSpritesheetMode: this.useSpritesheetMode,
+            spritesheetInfo: this.spritesheetManager ? this.spritesheetManager.getInfo() : null
+        };
+    }
+
+    // Cambiar el tipo de serpiente (0=naranja, 1=verde, 2=azul)
+    setSnakeType(type) {
+        if (this.spritesheetManager) {
+            this.spritesheetManager.setSnakeType(type);
+            Logger.log(`Cambiado a serpiente tipo ${type}: ${['Naranja', 'Verde', 'Azul'][type]}`);
+        }
+    }
+
+    // Obtener el tipo actual de serpiente
+    getCurrentSnakeType() {
+        return this.spritesheetManager ? this.spritesheetManager.currentSnakeType : 0;
     }
 }
 

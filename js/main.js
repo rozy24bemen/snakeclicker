@@ -8,8 +8,12 @@ document.addEventListener('DOMContentLoaded', () => {
     Logger.log('DOM cargado, inicializando juego...');
     
     try {
-        // Crear instancia del juego
+        // Crear instancia del juego primero
         game = new IdleSnakeGame();
+        
+        // 🌿 Inicializar fondo de césped después del juego
+        window.grassBackground = new SoftGrassBG('bg-canvas');
+        window.grassBackground.startWhenReady();
         
         // Configurar controles adicionales
         setupAdditionalControls();
@@ -251,10 +255,35 @@ function setupKeyboardShortcuts() {
                     game.toggleEditMode();
                 }
                 break;
+            case '1':
+                e.preventDefault();
+                game.snakeSprites.setSnakeType(0); // Serpiente naranja
+                break;
+            case '2':
+                e.preventDefault();
+                game.snakeSprites.setSnakeType(1); // Serpiente verde
+                break;
+            case '3':
+                e.preventDefault();
+                game.snakeSprites.setSnakeType(2); // Serpiente azul
+                break;
+            case 's':
+                e.preventDefault();
+                game.snakeSprites.cycleSnakeType(); // Ciclar entre tipos
+                break;
+            case 'r':
+                if (e.ctrlKey) { // Ctrl+R para recargar sprites
+                    e.preventDefault();
+                    if (game.snakeSprites && game.snakeSprites.spritesheetManager) {
+                        game.snakeSprites.spritesheetManager.reloadSpritesheet();
+                        Logger.log('🔄 Recargando sprites...');
+                    }
+                }
+                break;
         }
     });
     
-    Logger.log('Atajos de teclado configurados: Espacio/P (pausa), E (edición), Escape (salir edición)');
+    Logger.log('Atajos de teclado configurados: Espacio/P (pausa), E (edición), Escape (salir edición), 1-3 (cambiar serpiente), S (ciclar serpiente), Ctrl+R (recargar sprites)');
 }
 
 // Configurar herramientas de desarrollador
@@ -277,6 +306,104 @@ function setupDeveloperTools() {
     window.giveCM = (amount) => {
         game.stats.pureDNA += amount;
         game.updateUI();
+    };
+    
+    // � Función para recargar el spritesheet (cuando cambies assets.png)
+    window.reloadSprites = () => {
+        if (game.snakeSprites && game.snakeSprites.spritesheetManager) {
+            game.snakeSprites.spritesheetManager.reloadSpritesheet();
+            console.log('🔄 Recargando spritesheet... Espera unos segundos.');
+        } else {
+            console.log('❌ Sistema de sprites no disponible');
+        }
+    };
+
+    // �🗺️ Función para mostrar el mapa de posiciones del spritesheet
+    window.showSpriteMap = () => {
+        if (game.snakeSprites && game.snakeSprites.spritesheetManager) {
+            const map = game.snakeSprites.spritesheetManager.getPositionMap();
+            const info = game.snakeSprites.spritesheetManager.getInfo();
+            
+            console.log('🐍 MAPA DE POSICIONES DEL SPRITESHEET (32x32px por sprite)');
+            console.log('=====================================================');
+            console.log('📐 Dimensiones:', info.dimensions);
+            console.log('');
+            
+            console.log('👤 CABEZAS (Heads):');
+            Object.entries(map.heads).forEach(([direction, pos]) => {
+                console.log(`  ${direction.padEnd(8)}: Índice ${pos.index.toString().padStart(2)} -> X: ${pos.pixelX.toString().padStart(3)}px`);
+            });
+            
+            console.log('\n🟫 CUERPOS (Bodies):');
+            Object.entries(map.bodies).forEach(([type, pos]) => {
+                console.log(`  ${type.padEnd(12)}: Índice ${pos.index.toString().padStart(2)} -> X: ${pos.pixelX.toString().padStart(3)}px`);
+            });
+            
+            console.log('\n🔚 COLAS (Tails):');
+            Object.entries(map.tails).forEach(([direction, pos]) => {
+                console.log(`  ${direction.padEnd(8)}: Índice ${pos.index.toString().padStart(2)} -> X: ${pos.pixelX.toString().padStart(3)}px`);
+            });
+            
+            console.log('\n🌈 SERPIENTES (Y positions):');
+            console.log('  Naranja: Y: 0px   (Fila 0)');
+            console.log('  Verde:   Y: 32px  (Fila 1)');
+            console.log('  Azul:    Y: 64px  (Fila 2)');
+            
+            console.log('\n🎬 ANIMACIONES FUTURAS:');
+            const animInfo = game.snakeSprites.spritesheetManager.getAnimationInfo();
+            console.log('  Estado:', animInfo.available ? 'Activas' : 'Preparadas');
+            Object.entries(animInfo.futureFrames).forEach(([name, config]) => {
+                console.log(`  ${name}: Índice ${config.start} + ${config.frames} frames`);
+            });
+            
+            return map;
+        } else {
+            console.log('❌ Spritesheet no disponible');
+        }
+    };
+    
+    // 🌿 Funciones de debugging para el fondo de césped
+    window.grassInfo = () => {
+        if (window.grassBackground) {
+            console.log('🌿 INFORMACIÓN DEL FONDO DE CÉSPED');
+            console.log('================================');
+            const info = window.grassBackground.getInfo();
+            console.log('WebGL soportado:', info.webglSupported);
+            console.log('Shader compilado:', info.shaderCompiled);
+            console.log('Animando:', info.isAnimating);
+            console.log('Tamaño canvas:', info.canvasSize);
+            console.log('Configuración:', info.config);
+            return info;
+        } else {
+            console.log('❌ Fondo de césped no disponible');
+        }
+    };
+    
+    window.setGrassWind = (speed, strength) => {
+        if (window.grassBackground) {
+            window.grassBackground.setWindSpeed(speed || 0.5);
+            if (strength !== undefined) {
+                window.grassBackground.setWindStrength(strength);
+            }
+            console.log(`🌊 Viento ajustado: velocidad=${speed}, fuerza=${strength}`);
+        }
+    };
+    
+    window.setGrassColors = (base, tip, shadow) => {
+        if (window.grassBackground) {
+            window.grassBackground.setGrassColor(base, tip, shadow);
+            console.log('🎨 Colores de césped actualizados');
+        }
+    };
+
+    // 🎨 Ajustar color base de la serpiente (HSL)
+    window.setSnakeColorHSL = (h, s, l) => {
+        if (typeof PROC_VISUAL_CONFIG !== 'undefined') {
+            PROC_VISUAL_CONFIG.SNAKE_BASE_H = h;
+            PROC_VISUAL_CONFIG.SNAKE_BASE_S = s;
+            PROC_VISUAL_CONFIG.SNAKE_BASE_L = l;
+            console.log('🐍 Color base HSL actualizado:', h, s, l);
+        }
     };
 
     window.giveDNA = (amount) => {

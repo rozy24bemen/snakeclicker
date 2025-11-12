@@ -181,37 +181,85 @@ class GlyphMap {
 
     // Renderizar un glifo específico
     renderGlyph(ctx, x, y, glyphType, cellSize) {
+        // Soporte para objeto redirect { type, direction }
+        const actualType = (glyphType && typeof glyphType === 'object') ? glyphType.type : glyphType;
         const centerX = x * cellSize + cellSize / 2;
         const centerY = y * cellSize + cellSize / 2;
+        const t = Date.now() * 0.001;
 
         ctx.save();
+        const basePulse = 1 + Math.sin(t * 2.1 + (x + y) * 0.35) * 0.07;
+        const baseR = cellSize * 0.33 * basePulse;
 
-        // Establecer color según tipo de glifo
-        if (glyphType === GLYPH_TYPES.COMBO) {
-            ctx.fillStyle = GAME_CONFIG.GLYPH_COLORS.COMBO;
-            ctx.strokeStyle = '#FFFFFF';
-        } else if (glyphType === GLYPH_TYPES.CONSUMER) {
-            ctx.fillStyle = GAME_CONFIG.GLYPH_COLORS.CONSUMER;
-            ctx.strokeStyle = '#FFFFFF';
-        }
-
-        // Dibujar círculo base del glifo
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, cellSize * 0.35, 0, 2 * Math.PI);
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        // Dibujar símbolo específico del glifo
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = `${cellSize * 0.4}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-
-        if (glyphType === GLYPH_TYPES.COMBO) {
-            ctx.fillText('◆', centerX, centerY);
-        } else if (glyphType === GLYPH_TYPES.CONSUMER) {
-            ctx.fillText('⚡', centerX, centerY);
+        if (actualType === GLYPH_TYPES.COMBO) {
+            // Doble anillo rotatorio que marca multiplicador potencial
+            const spin = t * 0.9;
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 2; i++) {
+                const phase = spin + i * Math.PI * 0.85;
+                const ringR = baseR * (1 + i * 0.42);
+                const alpha = 0.55 - i * 0.25;
+                ctx.strokeStyle = `rgba(80,240,255,${alpha})`;
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, ringR, phase, phase + Math.PI * 1.35);
+                ctx.stroke();
+            }
+            // Símbolo × con glow
+            ctx.fillStyle = '#88F9FF';
+            ctx.font = `${cellSize * 0.38}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowColor = '#4FE8FF';
+            ctx.shadowBlur = 8;
+            ctx.fillText('×', centerX, centerY + 1);
+        } else if (actualType === GLYPH_TYPES.CONSUMER) {
+            // Núcleo naranja con flash periódico y gradiente radial
+            const flash = Math.max(0, Math.sin(t * 4.1));
+            const r = baseR * (1 + flash * 0.17);
+            const grad = ctx.createRadialGradient(centerX, centerY, r * 0.25, centerX, centerY, r * 1.45);
+            grad.addColorStop(0, '#FFB347');
+            grad.addColorStop(0.4, '#FF8C1F');
+            grad.addColorStop(1, 'rgba(255,140,31,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, r, 0, Math.PI * 2);
+            ctx.fill();
+            // Símbolo C con contorno
+            ctx.font = `${cellSize * 0.30}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#241400';
+            ctx.fillStyle = '#FFE1C2';
+            ctx.strokeText('C', centerX, centerY + 1);
+            ctx.fillText('C', centerX, centerY + 1);
+        } else if (actualType === GLYPH_TYPES.REDIRECT) {
+            // Flecha con brillo direccional (usa direction si existe)
+            const glow = (Math.sin(t * 3.2) * 0.5 + 0.5);
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            const g = ctx.createRadialGradient(centerX, centerY, baseR * 0.3, centerX, centerY, baseR * 1.25);
+            g.addColorStop(0, `rgba(220,100,255,${0.65 + glow * 0.25})`);
+            g.addColorStop(1, 'rgba(150,40,200,0)');
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, baseR * 1.28, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+            const arrow = '→';
+            ctx.fillStyle = '#F7E9FF';
+            ctx.font = `${cellSize * 0.34}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowColor = '#D756FF';
+            ctx.shadowBlur = 10 + glow * 12;
+            ctx.fillText(arrow, centerX, centerY + 1);
+        } else {
+            // Fallback: círculo simple
+            ctx.fillStyle = '#666';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, baseR, 0, Math.PI * 2);
+            ctx.fill();
         }
 
         ctx.restore();

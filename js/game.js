@@ -1093,28 +1093,82 @@ class IdleSnakeGame {
     renderFruit() { /* obsoleto mantenido temporalmente */ }
 
     renderFruits() {
+        const time = Date.now() * 0.001;
         this.fruits.forEach(fruit => {
-            const canvasPos = CanvasUtils.getCanvasFromCell(
-                fruit.position.x,
-                fruit.position.y,
-                GAME_CONFIG.CELL_SIZE
-            );
-            CanvasUtils.drawCircle(
-                this.ctx,
-                canvasPos.x + GAME_CONFIG.CELL_SIZE / 2,
-                canvasPos.y + GAME_CONFIG.CELL_SIZE / 2,
-                (GAME_CONFIG.CELL_SIZE / 2) - (fruit.type === 'golden' ? 1 : 3),
-                fruit.getColor(),
-                fruit.type === 'golden' ? '#FFFFFF' : null
-            );
+            const { x, y } = fruit.position;
+            const cellSize = GAME_CONFIG.CELL_SIZE;
+            const cx = x * cellSize + cellSize / 2;
+            const cy = y * cellSize + cellSize / 2;
+            const baseR = cellSize * 0.42;
+
+            // Pulsación para golden y dark
+            let pulse = 0;
+            if (fruit.type === 'golden') pulse = Math.sin(time * 3.5) * 0.08;
+            if (fruit.type === 'dark') pulse = Math.sin(time * 2.2) * 0.12;
+            const radius = baseR * (1 + pulse);
+
+            // Color base
+            let color = fruit.getColor();
+            if (fruit.type === 'dark') {
+                // Ajustar tono dinámicamente (levísimo shift para sentir energía)
+                const rgb = ColorUtils.hexToRgb(color);
+                if (rgb) {
+                    const hsl = ColorUtils.rgbToHsl(rgb.r, rgb.g, rgb.b);
+                    color = ColorUtils.hslToHex((hsl.h + Math.sin(time * 0.5) * 10), hsl.s, hsl.l);
+                }
+            }
+
+            // Gradiente interno de fruta
+            const grad = this.ctx.createRadialGradient(cx - radius*0.3, cy - radius*0.3, radius*0.2, cx, cy, radius);
+            grad.addColorStop(0, ColorUtils.adjustL(color, 0.12));
+            grad.addColorStop(0.6, color);
+            grad.addColorStop(1, ColorUtils.adjustL(color, -0.15));
+
+            // Aura para dark fruit (Dictador): pulso + deformación leve
+            if (fruit.type === 'dark') {
+                const auraR = radius * 1.55;
+                const auraAlpha = 0.18 + 0.07 * (Math.sin(time * 2) * 0.5 + 0.5);
+                this.ctx.save();
+                this.ctx.globalCompositeOperation = 'lighter';
+                const auraGrad = this.ctx.createRadialGradient(cx, cy, radius*0.6, cx, cy, auraR);
+                auraGrad.addColorStop(0, `rgba(130,50,180,${auraAlpha})`);
+                auraGrad.addColorStop(1, 'rgba(80,20,120,0)');
+                this.ctx.fillStyle = auraGrad;
+                this.ctx.beginPath();
+                this.ctx.arc(cx, cy, auraR, 0, Math.PI*2);
+                this.ctx.fill();
+                this.ctx.restore();
+            }
+
+            // Fruta principal
+            this.ctx.save();
+            this.ctx.fillStyle = grad;
+            this.ctx.beginPath();
+            this.ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            this.ctx.fill();
+
+            // Borde
+            this.ctx.lineWidth = fruit.type === 'golden' ? 2.2 : 1.4;
+            this.ctx.strokeStyle = fruit.type === 'golden' ? '#FFFFFF' : '#222';
+            if (fruit.type === 'dark') this.ctx.strokeStyle = '#AA66EE';
+            this.ctx.stroke();
+
+            // Símbolos
             if (fruit.type === 'golden') {
-                // Dibujar símbolo '$' para identificar Manzana Dorada
-                this.ctx.fillStyle = '#2b2b2b';
-                this.ctx.font = 'bold 16px Arial';
+                this.ctx.fillStyle = '#1A1A1A';
+                this.ctx.font = `${cellSize*0.42}px Arial`;
                 this.ctx.textAlign = 'center';
                 this.ctx.textBaseline = 'middle';
-                this.ctx.fillText('$', canvasPos.x + GAME_CONFIG.CELL_SIZE / 2, canvasPos.y + GAME_CONFIG.CELL_SIZE / 2 + 1);
+                this.ctx.fillText('$', cx, cy + 1);
+            } else if (fruit.type === 'dark') {
+                // Símbolo ADN Puro (◆ estilizado)
+                this.ctx.fillStyle = '#F2E6FF';
+                this.ctx.font = `${cellSize*0.38}px Arial`;
+                this.ctx.textAlign = 'center';
+                this.ctx.textBaseline = 'middle';
+                this.ctx.fillText('◆', cx, cy + 1);
             }
+            this.ctx.restore();
         });
     }
 
@@ -1151,48 +1205,9 @@ class IdleSnakeGame {
         this.glyphMap.render(this.ctx, GAME_CONFIG.CELL_SIZE);
     }
 
-    // Renderizar serpiente
+    // Renderizar serpiente (procedural, sin sprites)
     renderSnake() {
-        if (!this.snakeSprites || !this.snakeSprites.loaded) {
-            // Fallback al renderizado antiguo si los sprites no están listos
-            this.renderSnakeFallback();
-            return;
-        }
-
-        const animationOffset = this.snakeSprites.getAnimationOffset();
-        
-        this.snake.body.forEach((segment, index) => {
-            const canvasPos = CanvasUtils.getCanvasFromCell(
-                segment.x,
-                segment.y,
-                GAME_CONFIG.CELL_SIZE
-            );
-            
-            // Añadir pequeño offset de animación para movimiento fluido
-            const renderX = canvasPos.x + (Math.sin(Date.now() / 1000 + index * 0.5) * 1);
-            const renderY = canvasPos.y + (Math.cos(Date.now() / 1000 + index * 0.5) * 0.5);
-            
-            let sprite = null;
-            
-            if (index === 0) {
-                // Cabeza - obtener sprite direccional
-                const direction = this.snake.getCurrentDirection();
-                sprite = this.snakeSprites.getHeadSprite(direction);
-            } else if (index === this.snake.body.length - 1) {
-                // Cola - obtener sprite direccional
-                const prevSegment = this.snake.body[index - 1];
-                sprite = this.snakeSprites.getTailSprite(segment, prevSegment);
-            } else {
-                // Cuerpo - determinar tipo de segmento
-                const prevSegment = this.snake.body[index - 1];
-                const nextSegment = this.snake.body[index + 1];
-                sprite = this.snakeSprites.getBodySprite(prevSegment, segment, nextSegment);
-            }
-            
-            if (sprite) {
-                this.ctx.drawImage(sprite, renderX, renderY);
-            }
-        });
+        this.renderSnakeProcedural();
 
         // Efecto visual para boost
         if (this.snake.isBoostActive()) {
@@ -1202,7 +1217,6 @@ class IdleSnakeGame {
                 head.y,
                 GAME_CONFIG.CELL_SIZE
             );
-            
             CanvasUtils.drawCircle(
                 this.ctx,
                 canvasPos.x + GAME_CONFIG.CELL_SIZE / 2,
@@ -1221,6 +1235,75 @@ class IdleSnakeGame {
                 this.renderRedirectArrow(head, redirectDirection);
             }
         }
+    }
+
+    // Procedural: renderizado vectorial con escalado y gradiente HSL
+    renderSnakeProcedural() {
+        const baseH = PROC_VISUAL_CONFIG.SNAKE_BASE_H;
+        const baseS = PROC_VISUAL_CONFIG.SNAKE_BASE_S;
+        const baseL = PROC_VISUAL_CONFIG.SNAKE_BASE_L;
+        const cell = GAME_CONFIG.CELL_SIZE;
+
+        // Glow Combo: activar al pasar sobre glifo COMBO
+        const head = this.snake.getHead();
+        if (head && this.glyphMap && this.glyphMap.hasGlyphType(head.x, head.y, GLYPH_TYPES.COMBO)) {
+            this.comboGlowUntil = Date.now() + PROC_VISUAL_CONFIG.GLOW_DURATION_MS;
+        }
+        const glowActive = this.comboGlowUntil && Date.now() < this.comboGlowUntil;
+
+        // Dibujar de cabeza a cola
+        this.snake.body.forEach((seg, index) => {
+            const center = {
+                x: seg.x * cell + cell / 2,
+                y: seg.y * cell + cell / 2
+            };
+            const sizeRatio = Math.max(1 - index * PROC_VISUAL_CONFIG.SIZE_DECAY_FACTOR, PROC_VISUAL_CONFIG.MIN_SIZE_RATIO);
+            const radius = (cell * 0.46) * sizeRatio;
+
+            // Calcular luminancia por segmento
+            const l = Math.max(0.18, baseL - (index * PROC_VISUAL_CONFIG.LUMINANCE_DECAY));
+            const glowBoost = glowActive && index < 3 ? PROC_VISUAL_CONFIG.GLOW_EXTRA_L * (1 - index / 3) : 0;
+            const hex = ColorUtils.hslToHex(baseH, baseS, Math.min(1, l + glowBoost));
+
+            // Gradiente radial para look orgánico
+            const grad = this.ctx.createRadialGradient(center.x - radius * 0.3, center.y - radius * 0.3, radius * 0.2, center.x, center.y, radius);
+            grad.addColorStop(0, ColorUtils.adjustL(hex, 0.08));
+            grad.addColorStop(0.65, hex);
+            grad.addColorStop(1, ColorUtils.adjustL(hex, -0.12));
+
+            this.ctx.save();
+            // Glow exterior suave cuando activo
+            if (glowActive && index < 4) {
+                this.ctx.shadowColor = ColorUtils.hslToHex(baseH, baseS, Math.min(1, baseL + 0.2));
+                this.ctx.shadowBlur = 10 * (1 - index / 4);
+            }
+
+            // Círculo principal
+            CanvasUtils.drawCircle(this.ctx, center.x, center.y, radius, grad);
+
+            // Borde fino de alto contraste para estética tecnológica
+            this.ctx.lineWidth = Math.max(1, 2 * sizeRatio);
+            this.ctx.strokeStyle = '#111111';
+            this.ctx.beginPath();
+            this.ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+            this.ctx.stroke();
+
+            // Detalle de cabeza: indicador direccional
+            if (index === 0) {
+                const dir = this.snake.getCurrentDirection();
+                const tip = { x: center.x + dir.x * radius * 0.9, y: center.y + dir.y * radius * 0.9 };
+                const side = { x: -dir.y, y: dir.x };
+                this.ctx.fillStyle = ColorUtils.adjustL(hex, 0.18);
+                this.ctx.beginPath();
+                this.ctx.moveTo(tip.x, tip.y);
+                this.ctx.lineTo(center.x + side.x * radius * 0.45, center.y + side.y * radius * 0.45);
+                this.ctx.lineTo(center.x - side.x * radius * 0.45, center.y - side.y * radius * 0.45);
+                this.ctx.closePath();
+                this.ctx.fill();
+            }
+
+            this.ctx.restore();
+        });
     }
 
     // Renderizado fallback para serpiente (sin sprites)
