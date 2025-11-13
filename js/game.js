@@ -1335,73 +1335,166 @@ class IdleSnakeGame {
         }
     }
 
-    // Procedural: renderizado vectorial con escalado y gradiente HSL
+    // Procedural: renderizado continuo estilo "tubo" con grosor decreciente y esquinas dinámicas
     renderSnakeProcedural() {
         const baseH = PROC_VISUAL_CONFIG.SNAKE_BASE_H;
         const baseS = PROC_VISUAL_CONFIG.SNAKE_BASE_S;
         const baseL = PROC_VISUAL_CONFIG.SNAKE_BASE_L;
         const cell = GAME_CONFIG.CELL_SIZE;
 
+        const body = this.snake.body;
+        if (!body || body.length === 0) return;
+
         // Glow Combo: activar al pasar sobre glifo COMBO
-        const head = this.snake.getHead();
-        if (head && this.glyphMap && this.glyphMap.hasGlyphType(head.x, head.y, GLYPH_TYPES.COMBO)) {
+        const headCell = this.snake.getHead();
+        if (headCell && this.glyphMap && this.glyphMap.hasGlyphType(headCell.x, headCell.y, GLYPH_TYPES.COMBO)) {
             this.comboGlowUntil = Date.now() + PROC_VISUAL_CONFIG.GLOW_DURATION_MS;
         }
         const glowActive = this.comboGlowUntil && Date.now() < this.comboGlowUntil;
 
-        // Dibujar de cabeza a cola
-        this.snake.body.forEach((seg, index) => {
-            const center = {
-                x: seg.x * cell + cell / 2,
-                y: seg.y * cell + cell / 2
-            };
-            const sizeRatio = Math.max(1 - index * PROC_VISUAL_CONFIG.SIZE_DECAY_FACTOR, PROC_VISUAL_CONFIG.MIN_SIZE_RATIO);
-            const radius = (cell * 0.46) * sizeRatio;
+        // Convertir a coordenadas de canvas y preparar radios y colores por índice
+        const points = body.map(seg => ({ x: seg.x * cell + cell / 2, y: seg.y * cell + cell / 2 }));
+        const lastIndex = body.length - 1;
+        // Taper dinámico: colas menos pequeñas en serpientes cortas; mayor afinado a medida que crece
+        const lenFactor = Math.min(1, Math.max(0, (body.length - 4) / 16)); // 0 -> corta, 1 -> larga (>=20)
+        const BASE_DECAY_SMALL = 0.42;      // afinado total cuando es corta (ligeramente menor)
+        const BASE_MINR_SMALL  = 0.32;      // cola más gruesa al inicio
+        const decayTotalDyn = BASE_DECAY_SMALL + (PROC_VISUAL_CONFIG.SIZE_DECAY_TOTAL - BASE_DECAY_SMALL) * lenFactor;
+        const minRatioDyn   = BASE_MINR_SMALL + (PROC_VISUAL_CONFIG.MIN_SIZE_RATIO - BASE_MINR_SMALL) * lenFactor;
 
-            // Calcular luminancia por segmento
-            const l = Math.max(0.18, baseL - (index * PROC_VISUAL_CONFIG.LUMINANCE_DECAY));
-            const glowBoost = glowActive && index < 3 ? PROC_VISUAL_CONFIG.GLOW_EXTRA_L * (1 - index / 3) : 0;
-            const hex = ColorUtils.hslToHex(baseH, baseS, Math.min(1, l + glowBoost));
-
-            // Gradiente radial para look orgánico
-            const grad = this.ctx.createRadialGradient(center.x - radius * 0.3, center.y - radius * 0.3, radius * 0.2, center.x, center.y, radius);
-            grad.addColorStop(0, ColorUtils.adjustL(hex, 0.08));
-            grad.addColorStop(0.65, hex);
-            grad.addColorStop(1, ColorUtils.adjustL(hex, -0.12));
-
-            this.ctx.save();
-            // Glow exterior suave cuando activo
-            if (glowActive && index < 4) {
-                this.ctx.shadowColor = ColorUtils.hslToHex(baseH, baseS, Math.min(1, baseL + 0.2));
-                this.ctx.shadowBlur = 10 * (1 - index / 4);
-            }
-
-            // Círculo principal
-            CanvasUtils.drawCircle(this.ctx, center.x, center.y, radius, grad);
-
-            // Borde fino de alto contraste para estética tecnológica
-            this.ctx.lineWidth = Math.max(1, 2 * sizeRatio);
-            this.ctx.strokeStyle = '#111111';
-            this.ctx.beginPath();
-            this.ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
-            this.ctx.stroke();
-
-            // Detalle de cabeza: indicador direccional
-            if (index === 0) {
-                const dir = this.snake.getCurrentDirection();
-                const tip = { x: center.x + dir.x * radius * 0.9, y: center.y + dir.y * radius * 0.9 };
-                const side = { x: -dir.y, y: dir.x };
-                this.ctx.fillStyle = ColorUtils.adjustL(hex, 0.18);
-                this.ctx.beginPath();
-                this.ctx.moveTo(tip.x, tip.y);
-                this.ctx.lineTo(center.x + side.x * radius * 0.45, center.y + side.y * radius * 0.45);
-                this.ctx.lineTo(center.x - side.x * radius * 0.45, center.y - side.y * radius * 0.45);
-                this.ctx.closePath();
-                this.ctx.fill();
-            }
-
-            this.ctx.restore();
+        const radii = body.map((_, i) => {
+            const t = lastIndex === 0 ? 0 : (i / lastIndex); // 0 cabeza -> 1 cola
+            const scale = 1 - decayTotalDyn * t;
+            return (cell * 0.50) * Math.max(scale, minRatioDyn);
         });
+        const colors = body.map((_, i) => {
+            const t = lastIndex === 0 ? 0 : (i / lastIndex);
+            // Oscurecer progresivamente hasta TAIL_DARKEN, pero con ajuste por tamaño:
+            // - serpiente corta: cola más clara (menos darken)
+            // - serpiente larga: cola más oscura (más darken)
+            const effectiveTailDarken = PROC_VISUAL_CONFIG.TAIL_DARKEN * (0.55 + 0.45 * lenFactor);
+            let l = baseL - effectiveTailDarken * t;
+            l = Math.max(0.12, l);
+            const glowBoost = glowActive && i < 3 ? PROC_VISUAL_CONFIG.GLOW_EXTRA_L * (1 - i / 3) : 0;
+            return ColorUtils.hslToHex(baseH, baseS, Math.min(1, l + glowBoost));
+        });
+
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+
+        // Construir un único polígono con offsets y uniones redondeadas (arcos)
+        const left = [];
+        const right = [];
+        const lastIdx = points.length - 1;
+        const norm = (x, y) => { const l = Math.hypot(x, y) || 1; return { x: x / l, y: y / l }; };
+        const ang = (v) => Math.atan2(v.y, v.x);
+        const addArc = (arr, c, r, a0, a1) => {
+            // elegir delta más corto y muestrear cada ~12°
+            let d = a1 - a0;
+            while (d > Math.PI) d -= Math.PI * 2;
+            while (d < -Math.PI) d += Math.PI * 2;
+            const steps = Math.max(2, Math.ceil(Math.abs(d) / (Math.PI / 24))); // ~7.5°: un poco más redondeado
+            for (let s = 0; s <= steps; s++) {
+                const t = s / steps;
+                const a = a0 + d * t;
+                arr.push({ x: c.x + Math.cos(a) * r, y: c.y + Math.sin(a) * r });
+            }
+        };
+
+        for (let i = 0; i <= lastIdx; i++) {
+            const pi = points[i];
+            const ri = radii[i];
+
+            if (i === 0) {
+                const d1 = norm(points[1].x - pi.x, points[1].y - pi.y);
+                const n = { x: -d1.y, y: d1.x };
+                const a = ang(n);
+                left.push({ x: pi.x + n.x * ri, y: pi.y + n.y * ri });
+                right.push({ x: pi.x - n.x * ri, y: pi.y - n.y * ri });
+            } else if (i === lastIdx) {
+                const d0 = norm(pi.x - points[i - 1].x, pi.y - points[i - 1].y);
+                const n = { x: -d0.y, y: d0.x };
+                left.push({ x: pi.x + n.x * ri, y: pi.y + n.y * ri });
+                right.push({ x: pi.x - n.x * ri, y: pi.y - n.y * ri });
+            } else {
+                const pPrev = points[i - 1];
+                const pNext = points[i + 1];
+                const d0 = norm(pi.x - pPrev.x, pi.y - pPrev.y);
+                const d1 = norm(pNext.x - pi.x, pNext.y - pi.y);
+                const n0 = { x: -d0.y, y: d0.x };
+                const n1 = { x: -d1.y, y: d1.x };
+
+                const a0 = ang(n0);
+                const a1 = ang(n1);
+                // Arco para lado izquierdo (normales directas)
+                addArc(left, pi, ri, a0, a1);
+                // Arco para lado derecho (normales opuestas = +PI)
+                addArc(right, pi, ri, a0 + Math.PI, a1 + Math.PI);
+            }
+        }
+
+        // Rellenar cuerpo entero con gradiente cabeza→cola para continuidad de color
+        const bodyGrad = ctx.createLinearGradient(points[0].x, points[0].y, points[lastIdx].x, points[lastIdx].y);
+        bodyGrad.addColorStop(0, colors[0]);
+        bodyGrad.addColorStop(1, colors[lastIdx]);
+        ctx.fillStyle = bodyGrad;
+
+        if (left.length > 1 && right.length > 1) {
+            ctx.beginPath();
+            ctx.moveTo(left[0].x, left[0].y);
+            for (let i = 1; i < left.length; i++) ctx.lineTo(left[i].x, left[i].y);
+            for (let i = right.length - 1; i >= 0; i--) ctx.lineTo(right[i].x, right[i].y);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // Cap de cabeza (más brillante, grande)
+        const headR = radii[0];
+        const headHex = colors[0];
+        const headGrad = ctx.createRadialGradient(points[0].x - headR * 0.2, points[0].y - headR * 0.2, headR * 0.15, points[0].x, points[0].y, headR);
+        headGrad.addColorStop(0, ColorUtils.adjustL(headHex, 0.06));
+        headGrad.addColorStop(0.7, headHex);
+        headGrad.addColorStop(1, ColorUtils.adjustL(headHex, -0.08));
+        if (glowActive) {
+            ctx.shadowColor = ColorUtils.hslToHex(baseH, baseS, Math.min(1, baseL + 0.25));
+            ctx.shadowBlur = 16;
+        }
+        ctx.beginPath();
+        ctx.fillStyle = headGrad;
+        ctx.arc(points[0].x, points[0].y, headR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Indicador direccional en la cabeza
+        const dir = this.snake.getCurrentDirection();
+        if (dir) {
+            const tip = { x: points[0].x + dir.x * headR * 0.95, y: points[0].y + dir.y * headR * 0.95 };
+            const side = { x: -dir.y, y: dir.x };
+            ctx.fillStyle = ColorUtils.adjustL(headHex, 0.18);
+            ctx.beginPath();
+            ctx.moveTo(tip.x, tip.y);
+            ctx.lineTo(points[0].x + side.x * headR * 0.48, points[0].y + side.y * headR * 0.48);
+            ctx.lineTo(points[0].x - side.x * headR * 0.48, points[0].y - side.y * headR * 0.48);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // Cap de cola (más pequeño y oscuro)
+        const last = points.length - 1;
+        const tailR = radii[last];
+        const tailHex = colors[last];
+        const tailGrad = ctx.createRadialGradient(points[last].x - tailR * 0.18, points[last].y - tailR * 0.18, tailR * 0.12, points[last].x, points[last].y, tailR);
+        tailGrad.addColorStop(0, ColorUtils.adjustL(tailHex, 0.01));
+        tailGrad.addColorStop(0.7, tailHex);
+        tailGrad.addColorStop(1, ColorUtils.adjustL(tailHex, -0.10));
+        ctx.beginPath();
+        ctx.fillStyle = tailGrad;
+        ctx.arc(points[last].x, points[last].y, tailR, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
     }
 
     // Renderizado fallback para serpiente (sin sprites)

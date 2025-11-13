@@ -338,14 +338,21 @@ const ColorUtils = {
 
 // Configuración visual procedural para serpiente
 const PROC_VISUAL_CONFIG = {
-    SNAKE_BASE_H: 140,          // Verde cítrico base (H)
-    SNAKE_BASE_S: 0.75,         // Saturación
-    SNAKE_BASE_L: 0.65,         // Luminosidad base
-    SIZE_DECAY_FACTOR: 0.0025,  // Escalado por segmento
-    LUMINANCE_DECAY: 0.25 / 100, // L decay por índice (convertido a 0-1)
-    MIN_SIZE_RATIO: 0.35,       // No reducir más allá de esto
-    GLOW_DURATION_MS: 1200,     // Duración del glow combo
-    GLOW_EXTRA_L: 0.12,         // Extra luminosidad en glow
+    // Paleta azul eléctrica
+    SNAKE_BASE_H: 210,          // Azul (H)
+    SNAKE_BASE_S: 0.85,         // Saturación alta para brillo tecnológico
+    SNAKE_BASE_L: 0.62,         // Luminosidad inicial (cabeza)
+    // Nuevos parámetros de degradado y taper
+    SIZE_DECAY_TOTAL: 0.75,     // Proporción de reducción desde cabeza a cola (más notorio)
+    MIN_SIZE_RATIO: 0.18,       // Grosor mínimo en la cola (cola muy fina)
+    TAIL_DARKEN: 0.60,          // Cola mucho más oscura
+    // Legacy (se ignorarán algunos en nueva función, mantenidos por compatibilidad)
+    SIZE_DECAY_FACTOR: 0.0025,
+    LUMINANCE_DECAY: 0.25 / 100,
+    // Glow combo
+    GLOW_DURATION_MS: 1200,
+    GLOW_EXTRA_L: 0.15,
+    // Colores auxiliares
     COMBO_RING_COLOR: '#9C27B0',
     CONSUMER_FLASH_COLOR: '#FF1744',
     REDIRECT_ARROW_COLOR: '#FF5722'
