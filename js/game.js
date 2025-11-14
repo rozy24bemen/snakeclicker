@@ -49,7 +49,13 @@ class IdleSnakeGame {
     this.tilePlacementType = (typeof TILE_EFFECTS !== 'undefined' && TILE_EFFECTS.PC_MULT) ? TILE_EFFECTS.PC_MULT : 'PC_MULT';
     this.tileInventory = { PC_MULT: 0, SPEED: 0 };
     this.gameLoopId = null;
-    this.lastUpdateTime = 0;
+    this.lastFrameTime = 0;           // tiempo del último frame (para delta)
+    this.moveAccumulator = 0;         // acumulador para avanzar pasos discretos
+    this.currentMoveInterval = 0;     // duración del paso actual (ms)
+    this.renderAlpha = 0;             // 0..1 interpolación para render
+    // Eje de degradado estabilizado para el cuerpo (anti-parpadeo)
+    this.gradHead = null; // {x,y}
+    this.gradTail = null; // {x,y}
     // Prestigio
     this.prestigeReady = false;
 
@@ -95,6 +101,9 @@ class IdleSnakeGame {
         this.snake.body[0] = { x: center, y: center };
         this.snake.body[1] = { x: center - 1, y: center };
         this.snake.body[2] = { x: center - 2, y: center };
+        // Snapshot inicial para interpolación
+        this.prevSnakeBody = this.snake.body.map(s => ({ x: s.x, y: s.y }));
+
     // Multi-frutas (Fase 2): iniciar arreglo
     this.fruits = [];
     this.ensureFruitPopulation();
@@ -382,34 +391,45 @@ class IdleSnakeGame {
         }
     }
 
-    // Bucle principal del juego
+    // Bucle principal del juego (acumulador + interpolación)
     gameLoop(currentTime) {
         if (this.isPaused) {
             this.gameLoopId = requestAnimationFrame((time) => this.gameLoop(time));
             return;
         }
 
-        // Calcular delta time para movimiento basado en tiempo
-        const deltaTime = currentTime - this.lastUpdateTime;
-        let moveSpeed = this.snake.isBoostActive() ? 
-                         this.upgradeManager.getCurrentSpeed() / 3 : 
-                         this.upgradeManager.getCurrentSpeed();
-        // Aplicar baldosa de velocidad (SPEED) en la celda de la cabeza
-        const headForSpeed = this.snake.getHead();
-        if (this.tileEffects && headForSpeed && typeof getSpeedMultiplierForCell === 'function') {
-            const mult = getSpeedMultiplierForCell(this.tileEffects, headForSpeed.x, headForSpeed.y);
-            if (mult && mult > 0) moveSpeed = moveSpeed / mult;
-        }
+        // Delta frame
+        const deltaTime = this.lastFrameTime === 0 ? 0 : (currentTime - this.lastFrameTime);
+        this.lastFrameTime = currentTime;
 
-        if (deltaTime >= moveSpeed) {
+        // Actualizar animaciones auxiliares siempre por frame
+        if (this.snakeSprites) this.snakeSprites.update(deltaTime);
+
+        // Acumular tiempo y ejecutar pasos discretos según el intervalo vigente
+        this.moveAccumulator += deltaTime;
+        let safety = 0; // evitar bucles infinitos
+        while (safety++ < 8) {
+            // Calcular intervalo actual según upgrades/boost/baldosas bajo la cabeza
+            let interval = this.snake.isBoostActive() ? this.upgradeManager.getCurrentSpeed() / 3 : this.upgradeManager.getCurrentSpeed();
+            const headForSpeed = this.snake.getHead();
+            if (this.tileEffects && headForSpeed && typeof getSpeedMultiplierForCell === 'function') {
+                const mult = getSpeedMultiplierForCell(this.tileEffects, headForSpeed.x, headForSpeed.y);
+                if (mult && mult > 0) interval = interval / mult;
+            }
+            this.currentMoveInterval = Math.max(16, interval); // clamp mínimo por seguridad
+
+            if (this.moveAccumulator < this.currentMoveInterval) break;
+
+            this.moveAccumulator -= this.currentMoveInterval;
+            // Snapshot previo para render interpolado
+            this.prevSnakeBody = this.snake.body.map(s => ({ x: s.x, y: s.y }));
+            // Ejecutar un paso de lógica (mueve la serpiente y procesa colisiones, fruta, etc.)
             this.update();
-            this.lastUpdateTime = currentTime;
         }
 
-        // Actualizar animación de sprites
-        if (this.snakeSprites) {
-            this.snakeSprites.update(deltaTime);
-        }
+        // Factor de interpolación para render del frame actual
+        this.renderAlpha = this.currentMoveInterval > 0 ? (this.moveAccumulator / this.currentMoveInterval) : 0;
+        this.renderAlpha = Math.max(0, Math.min(1, this.renderAlpha));
 
         this.render();
         this.gameLoopId = requestAnimationFrame((time) => this.gameLoop(time));
@@ -1335,6 +1355,33 @@ class IdleSnakeGame {
         }
     }
 
+    // Obtener cuerpo interpolado para render (0..1)
+    getInterpolatedBody(alpha) {
+        // Suavizar el factor para un deslizamiento más orgánico
+        const t = AnimationUtils.easeInOut(Math.max(0, Math.min(1, alpha)));
+        const curr = this.snake.body;
+        const prev = (this.prevSnakeBody && this.prevSnakeBody.length) ? this.prevSnakeBody : curr;
+        const len = Math.max(curr.length, prev.length);
+        const body = [];
+        const sameLen = curr.length === prev.length;
+        for (let i = 0; i < len; i++) {
+            const currSeg = curr[i] || curr[curr.length - 1];
+            // Mapeo correcto general: i proviene de i-1; para la cola en paso sin crecimiento usar prev[i] -> curr[i]
+            let prevIndex = i === 0 ? 0 : (i - 1);
+            if (sameLen && i === (curr.length - 1)) prevIndex = i; // cola: de prev cola → cola actual (retrae suave)
+            if (prevIndex < 0) prevIndex = 0;
+            if (prevIndex >= prev.length) prevIndex = prev.length - 1;
+            const prevSeg = prev[prevIndex] || currSeg;
+
+            // Easing elástico ligero para la cola
+            const localT = (sameLen && i === (curr.length - 1)) ? AnimationUtils.easeOut(Math.min(1, t * 0.95)) : t;
+            const x = AnimationUtils.lerp(prevSeg.x, currSeg.x, localT);
+            const y = AnimationUtils.lerp(prevSeg.y, currSeg.y, localT);
+            body.push({ x, y });
+        }
+        return body;
+    }
+
     // Procedural: renderizado continuo estilo "tubo" con grosor decreciente y esquinas dinámicas
     renderSnakeProcedural() {
         const baseH = PROC_VISUAL_CONFIG.SNAKE_BASE_H;
@@ -1342,7 +1389,8 @@ class IdleSnakeGame {
         const baseL = PROC_VISUAL_CONFIG.SNAKE_BASE_L;
         const cell = GAME_CONFIG.CELL_SIZE;
 
-        const body = this.snake.body;
+        // Usar posiciones interpoladas entre paso anterior y actual
+        const body = this.getInterpolatedBody(this.renderAlpha || 0);
         if (!body || body.length === 0) return;
 
         // Glow Combo: activar al pasar sobre glifo COMBO
@@ -1436,20 +1484,110 @@ class IdleSnakeGame {
             }
         }
 
-        // Rellenar cuerpo entero con gradiente cabeza→cola para continuidad de color
-        const bodyGrad = ctx.createLinearGradient(points[0].x, points[0].y, points[lastIdx].x, points[lastIdx].y);
-        bodyGrad.addColorStop(0, colors[0]);
-        bodyGrad.addColorStop(1, colors[lastIdx]);
-        ctx.fillStyle = bodyGrad;
-
+        // Degradado siguiendo el cuerpo: calcular arclength y colorear cada tramo dentro de una silueta con esquinas redondeadas (clip).
+        // 0) Generar clip con el polígono redondeado para recuperar curvas suaves
+        let didClip = false;
         if (left.length > 1 && right.length > 1) {
+            ctx.save();
             ctx.beginPath();
             ctx.moveTo(left[0].x, left[0].y);
             for (let i = 1; i < left.length; i++) ctx.lineTo(left[i].x, left[i].y);
             for (let i = right.length - 1; i >= 0; i--) ctx.lineTo(right[i].x, right[i].y);
             ctx.closePath();
+            ctx.clip();
+            didClip = true;
+        }
+        
+        // 1) Calcular arclength sobre el centro
+        const arcLen = [0];
+        for (let i = 1; i < points.length; i++) {
+            const dx = points[i].x - points[i-1].x;
+            const dy = points[i].y - points[i-1].y;
+            arcLen[i] = arcLen[i-1] + Math.hypot(dx, dy);
+        }
+        const totalArc = arcLen[arcLen.length - 1] || 1;
+        const tailDark = PROC_VISUAL_CONFIG.TAIL_DARKEN * (0.55 + 0.45 * lenFactor);
+        const luminanceAt = (u) => {
+            // Head (0) brillante, transicion suave hasta 0.5, luego oscurece más hacia 1
+            if (u <= 0.5) {
+                const k = u / 0.5; // 0..1
+                return baseL - tailDark * 0.45 * k; // ~45% del oscurecido a mitad
+            } else {
+                const k = (u - 0.5) / 0.5; // 0..1
+                return baseL - tailDark * (0.45 + 0.55 * k); // completa hasta tailDark
+            }
+        };
+        for (let i = 0; i < points.length - 1; i++) {
+            const p = points[i];
+            const q = points[i+1];
+            const ri = radii[i];
+            const rj = radii[i+1];
+            const dx = q.x - p.x;
+            const dy = q.y - p.y;
+            const segLen = Math.max(0.0001, Math.hypot(dx, dy));
+            const tx = dx / segLen, ty = dy / segLen;
+            const nx = -ty, ny = tx;
+            const pL = { x: p.x + nx * ri, y: p.y + ny * ri };
+            const pR = { x: p.x - nx * ri, y: p.y - ny * ri };
+            const qL = { x: q.x + nx * rj, y: q.y + ny * rj };
+            const qR = { x: q.x - nx * rj, y: q.y - ny * rj };
+            // Gradiente local por tramo de u0->u1 para transiciones suaves y mantener curvas visuales
+            const u0 = (arcLen[i] / totalArc);
+            const u1 = (arcLen[i+1] / totalArc);
+            let l0 = luminanceAt(u0);
+            let l1 = luminanceAt(u1);
+            if (glowActive && i < 3) {
+                const boost = PROC_VISUAL_CONFIG.GLOW_EXTRA_L * (1 - i / 3);
+                l0 += boost; l1 += boost * 0.8;
+            }
+            l0 = Math.min(1, Math.max(0.08, l0));
+            l1 = Math.min(1, Math.max(0.08, l1));
+            const grad = ctx.createLinearGradient(p.x, p.y, q.x, q.y);
+            grad.addColorStop(0, ColorUtils.hslToHex(baseH, baseS, l0));
+            grad.addColorStop(1, ColorUtils.hslToHex(baseH, baseS, l1));
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.moveTo(pL.x, pL.y);
+            ctx.lineTo(qL.x, qL.y);
+            ctx.lineTo(qR.x, qR.y);
+            ctx.lineTo(pR.x, pR.y);
+            ctx.closePath();
             ctx.fill();
         }
+
+        // 2) Parches de esquina con color que sigue el gradiente del cuerpo
+        //    (evita que las uniones redondeadas hereden un color plano distinto).
+        if (didClip && points.length >= 3) {
+            // Umbral para detectar giro (producto punto entre direcciones consecutivas)
+            const turnThreshold = 0.997; // ~4.6° o más ya cuenta como giro
+            for (let i = 1; i < points.length - 1; i++) {
+                const a = points[i - 1];
+                const b = points[i];
+                const c = points[i + 1];
+                const abx = b.x - a.x, aby = b.y - a.y;
+                const bcx = c.x - b.x, bcy = c.y - b.y;
+                const lab = Math.hypot(abx, aby) || 1;
+                const lbc = Math.hypot(bcx, bcy) || 1;
+                const dax = abx / lab, day = aby / lab;
+                const dbx = bcx / lbc, dby = bcy / lbc;
+                const dot = dax * dbx + day * dby;
+                if (dot < turnThreshold) {
+                    // Color local según u en el vértice
+                    const u = (arcLen[i] / totalArc);
+                    let l = luminanceAt(u);
+                    if (glowActive && i < 3) l = Math.min(1, l + PROC_VISUAL_CONFIG.GLOW_EXTRA_L * (1 - i / 3));
+                    l = Math.min(1, Math.max(0.08, l));
+                    ctx.fillStyle = ColorUtils.hslToHex(baseH, baseS, l);
+                    // Disco ligeramente mayor para sellar cualquier hueco próximo a la curva
+                    const r = (radii[i] || (cell * 0.5)) + 1.0;
+                    ctx.beginPath();
+                    ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+        // Restaurar después del clip
+        if (didClip) ctx.restore();
 
         // Cap de cabeza (más brillante, grande)
         const headR = radii[0];
@@ -2056,6 +2194,12 @@ class IdleSnakeGame {
         this.stats.maxLength = Math.max(this.stats.maxLength, this.stats.currentLength);
         this.updateUI();
         Logger.log(`resetGame aplicado. gridSize=${this.gridSize}`);
+
+        // Reiniciar interpolación
+        this.prevSnakeBody = this.snake.body.map(s => ({ x: s.x, y: s.y }));
+        this.moveAccumulator = 0;
+        this.currentMoveInterval = 0;
+        this.renderAlpha = 0;
     }
 
     // Obtener información de debug
